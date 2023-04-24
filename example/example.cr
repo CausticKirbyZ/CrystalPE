@@ -88,6 +88,18 @@ puts "        > IAT Directory: #{ to_c_fmnt_hex(pefile.nt_headers.optional_heade
 puts "        > Delay Import Directory: #{ to_c_fmnt_hex(pefile.nt_headers.optional_headers.data_directory.delay_import_directory.not_nil!.virtual_address ) } #{   to_c_fmnt_hex(pefile.nt_headers.optional_headers.data_directory.delay_import_directory.not_nil!.size ) }"
 puts "        > COM Desc Directory: #{ to_c_fmnt_hex(pefile.nt_headers.optional_headers.data_directory.com_descriptor_directory.not_nil!.virtual_address ) } #{ to_c_fmnt_hex(pefile.nt_headers.optional_headers.data_directory.com_descriptor_directory.not_nil!.size ) }"
 
+puts "    > Section Headers: "
+pefile.section_table.each do |header| 
+    puts "        > Section: #{String.new(header.name.not_nil!) unless header.name.nil?}"
+    puts "            > Name: #{ to_c_fmnt_hex( header.name ) }"
+    puts "            > Misc(vsize/physaddr): #{ to_c_fmnt_hex( header.misc ) }"
+    puts "            > VirtualAddress: #{ to_c_fmnt_hex( header.virtual_address ) }"
+    puts "            > Size of Raw Data: #{ to_c_fmnt_hex( header.size_of_raw_data ) }"
+    puts "            > Ptr to Raw Data: #{ to_c_fmnt_hex( header.pointer_to_raw_data ) }"
+    puts "            > # of Relocations: #{ to_c_fmnt_hex( header.number_of_relocations ) }"
+    puts "            > # of Linenumbers: #{ to_c_fmnt_hex( header.number_of_linenumber ) }"
+    puts "            > Characteristics: #{ to_c_fmnt_hex( header.characteristics ) }"
+end 
 
 
 
@@ -100,6 +112,16 @@ puts "        > COM Desc Directory: #{ to_c_fmnt_hex(pefile.nt_headers.optional_
 
 
 
-puts "File is #{pefile.is64bit? ?  "x64" : "x86"}"
-puts "File ShannonEntropy: #{pefile.shannon_entropy}"
-puts "ImageBase: #{to_c_fmnt_hex(  IO::ByteFormat::LittleEndian.decode(Int64, pefile.nt_headers.optional_headers.image_base.not_nil! ) )}"
+
+
+puts "File Info: "
+puts "    > Bitting: #{pefile.is64bit? ?  "x64" : "x86"}"
+puts "    > ShannonEntropy: #{pefile.shannon_entropy}"
+puts "    > MD5 Sum: #{to_c_fmnt_hex(pefile.md5)}"
+puts "    > SHA256 Sum: #{to_c_fmnt_hex(pefile.sha256)}"
+puts "    > SHA1 Sum: #{to_c_fmnt_hex(pefile.sha1)}"
+puts "    > SHA1 Sum: #{to_c_fmnt_hex(pefile.sha512)}"
+
+
+# puts "ImageBase: #{to_c_fmnt_hex(  IO::ByteFormat::LittleEndian.decode(Int64, pefile.nt_headers.optional_headers.image_base.not_nil! ) )}"
+# puts "Number of Sections: #{  IO::ByteFormat::LittleEndian.decode(Int16, pefile.nt_headers.file_headers.number_of_sections.not_nil! ) }"

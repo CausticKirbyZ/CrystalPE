@@ -106,7 +106,6 @@ module CrystalPE
     end
 
 
-
     struct SectionHeader 
         property name                               : Bytes?
         property misc                               : Bytes? # this is either PhysicalAddress or VirtualSize

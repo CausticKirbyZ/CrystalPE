@@ -8,8 +8,12 @@ module CrystalPE
         property rich_header  : RichHeader    = RichHeader.new()
 
         property nt_headers    : NT_Headers    = NT_Headers.new()
-        # property sec_table    : SectionTable  = SectionTable.new()
         
+        # this is kinda like an addressbook/info blob about each section
+        property section_table  : Array(SectionHeader) = [] of SectionHeader
+
+        # sections will be where we store the actuall bytes for each section
+        property sections       : Hash(String, Bytes) = Hash(String, Bytes).new()
 
         # takes a filename on new and parses it
         def initialize(filename : String) 
@@ -77,30 +81,30 @@ module CrystalPE
                 if @nt_headers.optional_headers.magic == Bytes[0x0B,0x01]  # this is x86 binary then 
                     @nt_headers.optional_headers.major_linker_version               = rawfile[(fh_offset + 2)]
                     @nt_headers.optional_headers.minor_linker_version               = rawfile[(fh_offset + 3)]
-                    @nt_headers.optional_headers.size_of_code                       = rawfile[(fh_offset + 4)..(fh_offset + 7)]
-                    @nt_headers.optional_headers.size_of_initialized_data           = rawfile[(fh_offset + 8)..(fh_offset + 11)]
-                    @nt_headers.optional_headers.size_of_uninitialized_data         = rawfile[(fh_offset + 12)..(fh_offset + 15)]
-                    @nt_headers.optional_headers.address_of_entry_point             = rawfile[(fh_offset + 16)..(fh_offset + 19)]
-                    @nt_headers.optional_headers.base_of_code                       = rawfile[(fh_offset + 20)..(fh_offset + 23)]
-                    @nt_headers.optional_headers.base_of_data                       = rawfile[(fh_offset + 24)..(fh_offset + 27)]
-                    @nt_headers.optional_headers.image_base                         = rawfile[(fh_offset + 28)..(fh_offset + 35)]
-                    @nt_headers.optional_headers.section_alignment                  = rawfile[(fh_offset + 36)..(fh_offset + 39)]
-                    @nt_headers.optional_headers.file_alignment                     = rawfile[(fh_offset + 40)..(fh_offset + 43)]
-                    @nt_headers.optional_headers.major_operating_system_version     = rawfile[(fh_offset + 44)..(fh_offset + 45)]
-                    @nt_headers.optional_headers.minor_operating_system_version     = rawfile[(fh_offset + 46)..(fh_offset + 47)]
-                    @nt_headers.optional_headers.major_image_version                = rawfile[(fh_offset + 48)..(fh_offset + 49)]
-                    @nt_headers.optional_headers.minor_image_version                = rawfile[(fh_offset + 50)..(fh_offset + 51)]
-                    @nt_headers.optional_headers.major_subsystem_version            = rawfile[(fh_offset + 52)..(fh_offset + 53)]
-                    @nt_headers.optional_headers.minor_subsystem_version            = rawfile[(fh_offset + 54)..(fh_offset + 55)]
-                    @nt_headers.optional_headers.win32_version_value                = rawfile[(fh_offset + 56)..(fh_offset + 59)]
-                    @nt_headers.optional_headers.size_of_image                      = rawfile[(fh_offset + 60)..(fh_offset + 63)]
-                    @nt_headers.optional_headers.size_of_headers                    = rawfile[(fh_offset + 64)..(fh_offset + 67)]
-                    @nt_headers.optional_headers.check_sum                          = rawfile[(fh_offset + 68)..(fh_offset + 71)]
-                    @nt_headers.optional_headers.subsystem                          = rawfile[(fh_offset + 72)..(fh_offset + 73)]
-                    @nt_headers.optional_headers.dll_characteristics                = rawfile[(fh_offset + 74)..(fh_offset + 75)]
-                    @nt_headers.optional_headers.size_of_stack_reserve              = rawfile[(fh_offset + 76)..(fh_offset + 83)]
-                    @nt_headers.optional_headers.size_of_stack_commit               = rawfile[(fh_offset + 84)..(fh_offset + 91)]
-                    @nt_headers.optional_headers.size_of_heap_reserve               = rawfile[(fh_offset + 92)..(fh_offset + 99)]
+                    @nt_headers.optional_headers.size_of_code                       = rawfile[(fh_offset + 4  )..(fh_offset + 7  )]
+                    @nt_headers.optional_headers.size_of_initialized_data           = rawfile[(fh_offset + 8  )..(fh_offset + 11 )]
+                    @nt_headers.optional_headers.size_of_uninitialized_data         = rawfile[(fh_offset + 12 )..(fh_offset + 15 )]
+                    @nt_headers.optional_headers.address_of_entry_point             = rawfile[(fh_offset + 16 )..(fh_offset + 19 )]
+                    @nt_headers.optional_headers.base_of_code                       = rawfile[(fh_offset + 20 )..(fh_offset + 23 )]
+                    @nt_headers.optional_headers.base_of_data                       = rawfile[(fh_offset + 24 )..(fh_offset + 27 )]
+                    @nt_headers.optional_headers.image_base                         = rawfile[(fh_offset + 28 )..(fh_offset + 35 )]
+                    @nt_headers.optional_headers.section_alignment                  = rawfile[(fh_offset + 36 )..(fh_offset + 39 )]
+                    @nt_headers.optional_headers.file_alignment                     = rawfile[(fh_offset + 40 )..(fh_offset + 43 )]
+                    @nt_headers.optional_headers.major_operating_system_version     = rawfile[(fh_offset + 44 )..(fh_offset + 45 )]
+                    @nt_headers.optional_headers.minor_operating_system_version     = rawfile[(fh_offset + 46 )..(fh_offset + 47 )]
+                    @nt_headers.optional_headers.major_image_version                = rawfile[(fh_offset + 48 )..(fh_offset + 49 )]
+                    @nt_headers.optional_headers.minor_image_version                = rawfile[(fh_offset + 50 )..(fh_offset + 51 )]
+                    @nt_headers.optional_headers.major_subsystem_version            = rawfile[(fh_offset + 52 )..(fh_offset + 53 )]
+                    @nt_headers.optional_headers.minor_subsystem_version            = rawfile[(fh_offset + 54 )..(fh_offset + 55 )]
+                    @nt_headers.optional_headers.win32_version_value                = rawfile[(fh_offset + 56 )..(fh_offset + 59 )]
+                    @nt_headers.optional_headers.size_of_image                      = rawfile[(fh_offset + 60 )..(fh_offset + 63 )]
+                    @nt_headers.optional_headers.size_of_headers                    = rawfile[(fh_offset + 64 )..(fh_offset + 67 )]
+                    @nt_headers.optional_headers.check_sum                          = rawfile[(fh_offset + 68 )..(fh_offset + 71 )]
+                    @nt_headers.optional_headers.subsystem                          = rawfile[(fh_offset + 72 )..(fh_offset + 73 )]
+                    @nt_headers.optional_headers.dll_characteristics                = rawfile[(fh_offset + 74 )..(fh_offset + 75 )]
+                    @nt_headers.optional_headers.size_of_stack_reserve              = rawfile[(fh_offset + 76 )..(fh_offset + 83 )]
+                    @nt_headers.optional_headers.size_of_stack_commit               = rawfile[(fh_offset + 84 )..(fh_offset + 91 )]
+                    @nt_headers.optional_headers.size_of_heap_reserve               = rawfile[(fh_offset + 92 )..(fh_offset + 99 )]
                     @nt_headers.optional_headers.size_of_heap_commit                = rawfile[(fh_offset + 100)..(fh_offset + 107)]
                     @nt_headers.optional_headers.loader_flags                       = rawfile[(fh_offset + 108)..(fh_offset + 111)]
                     @nt_headers.optional_headers.number_of_rva_and_sizes            = rawfile[(fh_offset + 112)..(fh_offset + 115)]
@@ -108,8 +112,8 @@ module CrystalPE
                 elsif  @nt_headers.optional_headers.magic == Bytes[0x0B,0x02] # this is for x64 bit binaries 
                     @nt_headers.optional_headers.major_linker_version               = rawfile[(fh_offset + 2)]
                     @nt_headers.optional_headers.minor_linker_version               = rawfile[(fh_offset + 3)]
-                    @nt_headers.optional_headers.size_of_code                       = rawfile[(fh_offset + 4)..(fh_offset + 7)]
-                    @nt_headers.optional_headers.size_of_initialized_data           = rawfile[(fh_offset + 8)..(fh_offset + 11)]
+                    @nt_headers.optional_headers.size_of_code                       = rawfile[(fh_offset + 4 )..(fh_offset + 7 )]
+                    @nt_headers.optional_headers.size_of_initialized_data           = rawfile[(fh_offset + 8 )..(fh_offset + 11)]
                     @nt_headers.optional_headers.size_of_uninitialized_data         = rawfile[(fh_offset + 12)..(fh_offset + 15)]
                     @nt_headers.optional_headers.address_of_entry_point             = rawfile[(fh_offset + 16)..(fh_offset + 19)]
                     @nt_headers.optional_headers.base_of_code                       = rawfile[(fh_offset + 20)..(fh_offset + 23)]
@@ -140,48 +144,67 @@ module CrystalPE
 
                     # its 16 sets of 2x4 byte chunks so 64 bytes
                     16.times do |i|
-                        puts (i*8) + dd_offset 
+                        # puts (i*8) + dd_offset 
                         d = ImageDataDirectory.new()
                         d.virtual_address  = rawfile[(dd_offset + (i*8))..(dd_offset + (i*8 + 3))]
                         d.size             = rawfile[(dd_offset + ((i*8) + 4))..(dd_offset + ((i*8) + 7))]
 
                         case i 
                         when 0 
-                            @nt_headers.optional_headers.data_directory.export_directory = d
+                            @nt_headers.optional_headers.data_directory.export_directory            = d
                         when 1 
-                            @nt_headers.optional_headers.data_directory.import_directory = d
+                            @nt_headers.optional_headers.data_directory.import_directory            = d
                         when 2 
-                            @nt_headers.optional_headers.data_directory.resource_directory  = d
+                            @nt_headers.optional_headers.data_directory.resource_directory          = d
                         when 3 
-                            @nt_headers.optional_headers.data_directory.exception_directory  = d
+                            @nt_headers.optional_headers.data_directory.exception_directory         = d
                         when 4 
-                            @nt_headers.optional_headers.data_directory.security_directory   = d
+                            @nt_headers.optional_headers.data_directory.security_directory          = d
                         when 5 
-                            @nt_headers.optional_headers.data_directory.basereloc_directory = d
+                            @nt_headers.optional_headers.data_directory.basereloc_directory         = d
                         when 6 
-                            @nt_headers.optional_headers.data_directory.debug_directory = d
+                            @nt_headers.optional_headers.data_directory.debug_directory             = d
                         when 7 
-                            @nt_headers.optional_headers.data_directory.architecture_directory = d
+                            @nt_headers.optional_headers.data_directory.architecture_directory      = d
                         when 8 
-                            @nt_headers.optional_headers.data_directory.global_ptr_directory = d
+                            @nt_headers.optional_headers.data_directory.global_ptr_directory        = d
                         when 9 
-                            @nt_headers.optional_headers.data_directory.tls_directory = d
+                            @nt_headers.optional_headers.data_directory.tls_directory               = d
                         when 10 
-                            @nt_headers.optional_headers.data_directory.load_config_directory = d
+                            @nt_headers.optional_headers.data_directory.load_config_directory       = d
                         when 11 
-                            @nt_headers.optional_headers.data_directory.bound_import_directory = d
+                            @nt_headers.optional_headers.data_directory.bound_import_directory      = d
                         when 12 
-                            @nt_headers.optional_headers.data_directory.iat_directory = d
+                            @nt_headers.optional_headers.data_directory.iat_directory               = d
                         when 13 
-                            @nt_headers.optional_headers.data_directory.delay_import_directory = d
+                            @nt_headers.optional_headers.data_directory.delay_import_directory      = d
                         when 14 
-                            @nt_headers.optional_headers.data_directory.com_descriptor_directory = d
+                            @nt_headers.optional_headers.data_directory.com_descriptor_directory    = d
                         when 15 
                             # this one shouldnt exist XD but maybe some day???
                         end 
 
                     end 
 
+
+                    sec_header_offset = dd_offset + ((16*8)) # set up offset based on position +1 of last entry inb data directory 
+
+                    # now we parse the section headers
+                    # Section headers are 40 bytes long
+                    section_count = IO::ByteFormat::LittleEndian.decode(Int16, @nt_headers.file_headers.number_of_sections.not_nil! )
+                    section_count.times do |i|
+                        t = SectionHeader.new()
+                        t.name                      = rawfile[(sec_header_offset + (i*40)       )..(sec_header_offset + (i*40   + 7     ))] # this one is a qword long 
+                        t.misc                      = rawfile[(sec_header_offset + ((i*40) + 8 ))..(sec_header_offset + ((i*40) + 8  + 3))] # using the ((i*8) + 8  + 3) schema to easier find and identify words, dwords and qwords while readin the code 
+                        t.virtual_address           = rawfile[(sec_header_offset + ((i*40) + 12))..(sec_header_offset + ((i*40) + 12 + 3))]
+                        t.size_of_raw_data          = rawfile[(sec_header_offset + ((i*40) + 16))..(sec_header_offset + ((i*40) + 16 + 3))]
+                        t.pointer_to_raw_data       = rawfile[(sec_header_offset + ((i*40) + 20))..(sec_header_offset + ((i*40) + 20 + 3))]
+                        t.pointer_to_line_numbers   = rawfile[(sec_header_offset + ((i*40) + 24))..(sec_header_offset + ((i*40) + 24 + 3))] 
+                        t.number_of_relocations     = rawfile[(sec_header_offset + ((i*40) + 28))..(sec_header_offset + ((i*40) + 28 + 1))]
+                        t.number_of_linenumber      = rawfile[(sec_header_offset + ((i*40) + 30))..(sec_header_offset + ((i*40) + 30 + 1))]
+                        t.characteristics           = rawfile[(sec_header_offset + ((i*40) + 32))..(sec_header_offset + ((i*40) + 32 + 7))]
+                        section_table << t 
+                    end
 
 
 
@@ -199,14 +222,27 @@ module CrystalPE
         end 
 
 
-        def is64bit?
+
+
+
+        ###################################
+        # These functions will compute
+        # some basic info about the file 
+        # or the bytes supplied 
+        ###################################
+
+
+        # returns if the file parsed is x64 
+        def is64bit? : Bool 
             return @nt_headers.optional_headers.magic == Bytes[0x0B,0x02]
         end
 
-        def is32bit?
+        # returns if the file parsed is x86 
+        def is32bit? : Bool 
             return @nt_headers.optional_headers.magic == Bytes[0x0B,0x01]
         end
 
+        # returns a numeric shannon entropy value
         def shannon_entropy : Float64 
             data = rawfile
             frequency = Hash(UInt8, Int32).new(0)
@@ -219,6 +255,78 @@ module CrystalPE
             end
             -entropy
         end
+
+        # returns a numeric shannon entropy value of the given bytes
+        def shannon_entropy(data : Bytes ) : Float64 
+            frequency = Hash(UInt8, Int32).new(0)
+            data.each { |byte| frequency[byte] += 1 }
+            data_size = data.size.to_f
+            entropy = 0.0
+            frequency.each do |byte, count|
+                probability = count / data_size
+                entropy += probability * Math.log(probability, 2)
+            end
+            -entropy
+        end
+
+
+
+        # outputs the md5sum of the file 
+        def md5 : Bytes 
+            d = Digest::MD5.new()
+            d << rawfile 
+            return d.final
+        end 
+
+        # returns the md5sum bytes of the supplied bytes 
+        def md5(bytes : Bytes ) : Bytes 
+            d = Digest::MD5.new()
+            d << bytes
+            return d.final
+        end 
+
+        # outputs the sha256sum of the file
+        def sha256 : Bytes 
+            d = Digest::SHA256.new()
+            d << rawfile 
+            return d.final
+        end
+        
+        # returns the sha256sum bytes of the supplied bytes 
+        def sha256(bytes : Bytes ) : Bytes 
+            d = Digest::SHA256.new()
+            d << bytes
+            return d.final
+        end 
+        
+        # outputs the sha1sum of the file
+        def sha1 : Bytes 
+            d = Digest::SHA1.new()
+            d << rawfile 
+            return d.final
+        end
+        
+        # returns the sha1sum bytes of the supplied bytes 
+        def sha1(bytes : Bytes ) : Bytes 
+            d = Digest::SHA1.new()
+            d << bytes
+            return d.final
+        end 
+        
+        # outputs the sha512sum of the file
+        def sha512 : Bytes 
+            d = Digest::SHA512.new()
+            d << rawfile 
+            return d.final
+        end
+        
+        # returns the sha512sum bytes of the supplied bytes 
+        def sha512(bytes : Bytes ) : Bytes 
+            d = Digest::SHA512.new()
+            d << bytes
+            return d.final
+        end 
+
 
     end 
 end
