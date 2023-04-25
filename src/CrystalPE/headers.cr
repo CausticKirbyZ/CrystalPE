@@ -1,7 +1,7 @@
 module CrystalPE
 
     # dos header is a 64 Byte header
-    struct DOS_Header
+    class DOS_Header
         property e_magic    : Bytes? # = Bytes[0x0]               # Magic number
         property e_cblp     : Bytes? # = Bytes[0x0]               # Bytes on last page of file
         property e_cp       : Bytes? # = Bytes[0x0]               # Pages in file
@@ -24,21 +24,21 @@ module CrystalPE
     end
 
 
-    struct DOS_Stub 
+    class DOS_Stub 
         # property stub 
     end
 
-    struct RichHeader
+    class RichHeader
     end
 
 
-    struct NT_Headers
+    class NT_Headers
         property signature                          : Bytes? 
         property file_headers                       : NTFileHeaders =  NTFileHeaders.new()
         property optional_headers                   : NTOptionalHeaders = NTOptionalHeaders.new()
     end
 
-    struct NTFileHeaders
+    class NTFileHeaders
         property machine                            : Bytes? 
         property number_of_sections                 : Bytes? 
         property time_date_stamp                    : Bytes? 
@@ -48,7 +48,7 @@ module CrystalPE
         property characteristics                    : Bytes? 
     end
 
-    struct NTOptionalHeaders
+    class NTOptionalHeaders
         property magic                              : Bytes? 
         property major_linker_version               : UInt8? 
         property minor_linker_version               : UInt8? 
@@ -82,7 +82,7 @@ module CrystalPE
         property data_directory                     : DataDirectory = DataDirectory.new 
     end 
 
-    struct DataDirectory
+    class DataDirectory
         property export_directory                   : ImageDataDirectory?
         property import_directory                   : ImageDataDirectory?
         property resource_directory                 : ImageDataDirectory?
@@ -100,23 +100,56 @@ module CrystalPE
         property com_descriptor_directory           : ImageDataDirectory?
     end 
 
-    struct ImageDataDirectory
+    class ImageDataDirectory
         property virtual_address                    : Bytes? 
         property size                               : Bytes? 
     end
 
 
-    struct SectionHeader 
-        property name                               : Bytes?
-        property misc                               : Bytes? # this is either PhysicalAddress or VirtualSize
-        property virtual_address                    : Bytes? 
-        property size_of_raw_data                   : Bytes? 
-        property pointer_to_raw_data                : Bytes? 
-        property pointer_to_line_numbers            : Bytes? 
-        property number_of_relocations              : Bytes? 
-        property number_of_linenumber               : Bytes? 
-        property characteristics                    : Bytes? 
+    class SectionHeader 
+        property name                               : Bytes? # QWORD
+        property misc                               : Bytes? # DWORD # this is either PhysicalAddress or VirtualSize
+        property virtual_address                    : Bytes? # DWORD
+        property size_of_raw_data                   : Bytes? # DWORD
+        property pointer_to_raw_data                : Bytes? # DWORD
+        property pointer_to_line_numbers            : Bytes? # DWORD
+        property number_of_relocations              : Bytes? # WORD
+        property number_of_linenumber               : Bytes? # WORD
+        property characteristics                    : Bytes? # DWORD
     end
+
+
+    class ImageImportDescriptor 
+        property originalfirstthunk                 : Bytes?                                 
+        property time_date_stamp                    : Bytes?             
+        property forwarder_chain                    : Bytes?             
+        property name                               : Bytes? 
+        property first_thunk                        : Bytes?         
+    end 
+
+    class ImageImportByName
+        property hint : Bytes? # WORD
+        # property name : Bytes? # 100 bytes long by default? 
+        property name : String = ""
+    end 
+
+
+
+    # this class is not part of windows but a medium for ease of use while using import adress table items
+    class ImportedInfo 
+        property image_import_descriptor            : ImageImportDescriptor = ImageImportDescriptor.new()
+        property functions                          : Array(ImageImportByName) = [] of ImageImportByName        
+        property dll_name                           : String = ""
+    end 
+
+    # class ILT_Entry
+    #     # in c thsese are a union
+    #     # 32bit is the first 3 64bit is the first 2 and the last one is its own 
+    #     ordinal
+    #     hint_name_tabe
+    #     ordinal_name_flag 
+    # end 
+
 
 
 
