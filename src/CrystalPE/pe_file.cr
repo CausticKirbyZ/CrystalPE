@@ -1,7 +1,7 @@
 module CrystalPE
     class PE_File
-
-        property rawfile : Bytes = "0x00".to_slice # this is a default of nothing 
+        # property rawfile : Bytes = "0x00".to_slice # this is a default of nothing 
+        property rawfile : Bytes = Bytes[] # this is a default of nothing 
 
         property dos_header   : DOS_Header    = DOS_Header.new()
         property dos_stub     : DOS_Stub      = DOS_Stub.new()
@@ -15,16 +15,30 @@ module CrystalPE
         # sections will be where we store the actuall bytes for each section
         property sections       : Hash(String, Bytes) = Hash(String, Bytes).new()
 
+        # property overlay        : Bytes = Bytes[]
+        property overlay          : Overlay = Overlay.new()
+
 
         # Import address table as an array of ImageImportDescriptors
         # property iat            : Array(ImageImportDescriptor) = [] of ImageImportDescriptor
+        # property eat            : Array
         property iat            : Array(ImportedInfo) = [] of ImportedInfo
+
+        property img_exp_dir    : ImageExportDirectory = ImageExportDirectory.new() 
+        property exports        : Array(ExportedFunction) = [] of ExportedFunction
 
 
 
         # takes a filename on new and parses it
         def initialize(filename : String) 
             parse(filename)
+        end
+
+        def initialize(filebts : Bytes )
+            parse(filebts)
+        end 
+
+        def initialize
         end
 
 
@@ -34,11 +48,66 @@ module CrystalPE
             parse
         end 
 
+        def parse(filebts : Bytes )
+            @rawfile = filebts 
+            parse 
+        end 
+
+        # returns the pefile as a byte array. good for writing to a file 
+        def to_slice( ) : Bytes 
+            io = IO::Memory.new() 
+            # File.open(filename, "w") do |fi|
+                io.write @dos_header.raw_bytes()
+                io.write @dos_stub.raw_bytes()
+                io.write @rich_header.raw_bytes() 
+                io.write @nt_headers.raw_bytes()
+
+                @section_table.each do |s| 
+                    io.write s.raw_bytes()
+                end 
+
+                # now we have to ensure the file is aligned properly
+                # this is done by adding padding between the section header and the first section 
+                # to ensure the first section starts at the beginning of a multiple of the file alignment.
+                # file alignment size can be found at the optional header value of "FileAlignment often at offset #BC"
+                # this file padding is done with all null bytes but technically it could be anything. 
+
+                # puts "Current Pos: #{io.pos}"       
+                # puts "Offset Hex:  #{to_c_fmnt_hex(@nt_headers.optional_headers.file_alignment.not_nil!) }"         
+                # puts "Offset Dec:  #{IO::ByteFormat::LittleEndian.decode(Int32,@nt_headers.optional_headers.file_alignment.not_nil!) }"         
+                # puts "Difference:  #{IO::ByteFormat::LittleEndian.decode(Int32,@nt_headers.optional_headers.file_alignment.not_nil! ) - (io.pos % IO::ByteFormat::LittleEndian.decode(Int32,@nt_headers.optional_headers.file_alignment.not_nil! ))}"
+                (IO::ByteFormat::LittleEndian.decode(Int32,@nt_headers.optional_headers.file_alignment.not_nil! ) - (io.pos % IO::ByteFormat::LittleEndian.decode(Int32,@nt_headers.optional_headers.file_alignment.not_nil! )) ).times do |i|
+                    io.write Bytes[0]
+                end 
+                # end of aligning file 
+
+                @sections.each do |k,v| 
+                    # puts "Writing Secdion: #{k}"
+                    # puts "Section Raw: #{to_c_fmnt_hex(v)}"
+                    # gets 
+                    io.write v
+                end 
+
+                io.write @overlay.bytes 
+
+            # end 
+            # File.write(filename , io.to_slice) 
+            return io.to_slice 
+        end 
+
 
         # function parses a pe file from a byte array
         def parse
                 # do the rest of the parsing here 
-                io = IO::Memory.new @rawfile 
+                # io = IO::Memory.new @rawfile 
+                # puts "dbg: rawfile[0..1]: |#{String.new(rawfile[0..1]) }|"
+                # puts "dbg: rawfile[0..1]: #{rawfile[0..1] }"
+                if rawfile.size < 96 # smallest recorded pe file i could find online was 97 bytes...
+                    raise "Parsing Error! - Size"
+                elsif String.new(rawfile[0..1]) != "MZ"
+                    raise "Not a PE File.... 'MZ' != '#{String.new(rawfile[0..1])}'"
+                end 
+
 
 
                 # This section parses the DOS Header into its structure. its well defined and is 64 bytes long
@@ -60,10 +129,94 @@ module CrystalPE
                 @dos_header.e_oemid    = rawfile[36..37]
                 @dos_header.e_oeminfo  = rawfile[38..39]
                 @dos_header.e_res2     = rawfile[40..59]
-                @dos_header.e_lfanew   = rawfile[60..64]
+                @dos_header.e_lfanew   = rawfile[60..63]
                 
                 # set temp so we dont have to use the full var name XD
-                e_lfanew = IO::ByteFormat::LittleEndian.decode(Int32, rawfile[60..64] )
+                # e_lfanew is the offset of the new exe header (pe header start)
+                e_lfanew = IO::ByteFormat::LittleEndian.decode(Int32, rawfile[60..63] )
+                
+                # this is misleading and is actually the "Rich" offset but this gets updated later with the correct value. 
+                # needs to be up here to be referenced later
+                dans_offset = ( e_lfanew - 16)
+
+
+
+                # puts "DBG: e_lfanew : #{to_c_fmnt_hex( e_lfanew) }"
+                if e_lfanew > 64 
+                    # dos stubs and rich headers technically dont need to exist. so only parse them if there is an offset over 64 bytes 
+                    # parse the rich header 
+                    # puts "DBG: #{ to_c_fmnt_hex rawfile[64..( e_lfanew - 1 )] }"
+
+                    # if "Rich" is in the header value 
+                    # if rawfile[64..( e_lfanew - 1 )].includes? Bytes[ 0x52, 0x69, 0x63, 0x68 ]
+                    if String.new(rawfile[64..( e_lfanew - 1 )]).includes? "Rich"
+                        # puts "DBG: Contains Rich Header!"
+                        # start at 16 bytes before e_lfanew. there "should" be a "Rich" string then a 4 byte key then 8 bytes of null to end the rich header
+                        rich_key_ending = rawfile[ ( e_lfanew - 16) .. ( e_lfanew - 1) ]
+                        rich = rich_key_ending[0..3]
+                        @rich_header.rich_id = rich_key_ending[0..3] # should be "Rich"
+                        xor_key = rich_key_ending[4..7] # xor key is the next 4 bytes after "Rich"
+                        @rich_header.xor_key = rich_key_ending[4..7] # xor key is the next 4 bytes after "Rich"
+                        ending = rich_key_ending[8..] # followed by an 8 byte string of null(or should be)
+                        puts "DBG: Got Keys and stuff"
+
+
+                        dans = Bytes[]
+                        if String.new(rich) == "Rich"
+                            # puts "DBG: Getting dans_offset: #{dans_offset}"
+                            # walk backward through the offset till we find "DanS"
+                            while true 
+                                # puts "DBG: New dans_offset: #{dans_offset}"
+                                if dans_offset < 1 
+                                    # puts "DBG: Breaking: #{dans_offset}"
+                                    break 
+                                end
+                                
+                                rich_unxored = String.new( RichHeader.xor_decrypt(rawfile[dans_offset..dans_offset+3], xor_key ) ) 
+                                # puts "DBG: RichXorDeced: #{rich_unxored}"
+                                if  rich_unxored == "DanS"
+                                    dans = rawfile[dans_offset..dans_offset+3] # get our raw bytes 
+                                    @rich_header.dans_id = rawfile[dans_offset..dans_offset+3] # get our raw bytes 
+                                    # puts "DBG: Found DanS Stub"
+                                    break
+                                end 
+                                dans_offset = dans_offset - 4 
+                            end 
+                            @rich_header.bytes = @rawfile[dans_offset..e_lfanew-1]
+                        end 
+                        
+                        puts "Parsed Rich header"
+                        # puts "DBG: Rich:   #{String.new rich}"
+                        # puts "DBG: Key:    #{to_c_fmnt_hex(xor_key ) }"
+                        # puts "DBG: ending: #{to_c_fmnt_hex(ending ) }"
+                        # puts "RichRaw: #{ to_c_fmnt_hex(@rich_header.bytes ) }"
+                        
+                    end 
+
+                    # end of rich header parse 
+
+
+
+                    # now we can parse the dos stub here 
+                    # we parse it after the rich header as we need to know the length of the rich header if there is one 
+                    # so we can 
+                    # dos header is designated as the space between the end of the dos header and the start of the PE headers 
+                    if !@rich_header.bytes.nil?
+                        # dos stub is actually only untill the beginning of the rich header
+                        @dos_stub.bytes = rawfile[64..( dans_offset - 1 )] 
+                    else 
+                        # this is for those that dont have a rich header
+                        # this will also trigger if the "Rich" String is not present. this may be hideable by changing the "Rich" string to something else but the encoding would still be valid 
+                        @dos_stub.bytes = rawfile[64..( e_lfanew - 1 )] 
+                    end 
+                end 
+                # end of parsing dos stub 
+
+
+
+
+
+
 
                 # now parse the nt file headers
                 @nt_headers.signature = rawfile[e_lfanew..(e_lfanew+3)] # should be PE00
@@ -82,6 +235,8 @@ module CrystalPE
 
                 # now parse the optional headers 
                 @nt_headers.optional_headers.magic                                 = rawfile[fh_offset..(fh_offset + 1)]
+                @nt_headers.optional_headers.optional_offset = fh_offset 
+
 
                 # now handle if the program is 32 bit
                 # magic bytes should be 0B02 for x64 
@@ -222,28 +377,141 @@ module CrystalPE
 
 
 
-                # now we parse the sections themselves 
+                # now we parse the sections themselves
+                endoflastsection_offset = 0 
                 section_table.each do |header|
                     offset = IO::ByteFormat::LittleEndian.decode(Int32, header.pointer_to_raw_data.not_nil! ) 
                     size   = IO::ByteFormat::LittleEndian.decode(Int32,header.size_of_raw_data.not_nil! ) 
-                    section = rawfile[(offset)..(offset + size - 1 )]
+                    # puts "DBG: Size-1: #{size - 1 }"
+                    if ( size - 1 ) < 0 
+                        section = Bytes[] # this is for the bss section or any section htat doestn have a size 
+                    else 
+                        endoflastsection_offset = offset + (size )
+                        section = rawfile[(offset)..(offset + (size - 1 ) )] 
+                    end 
+
+
                     # sections[to_c_fmnt_hex( header.name )] = section 
-                    sections[String.new(header.name.not_nil!)] = section 
+                    sections[String.new(header.name.not_nil!)] = section
                 end 
+
+
+                # now grab the overlay it is the chunk of data at the end of the binary 
+                @overlay.bytes = rawfile[endoflastsection_offset..]
+                @overlay.offset = endoflastsection_offset
+
+
+
+
+
+
+
+
 
                 ########################
                 # the below blobs parse each section in the data directory 
                 ########################
 
-
+                puts "Parsing Export directory"
                 # Parse the Export Directory here
+                if @nt_headers.optional_headers.data_directory.export_directory.not_nil!.virtual_address.not_nil! != Bytes[0,0,0,0,0,0,0,0] # prob should have an export dir before we parse it XD 
+
+                    # first parse the export dir for info and rvas
+                    export_dir_offset = resolve_rva_offset(@nt_headers.optional_headers.data_directory.export_directory.not_nil!.virtual_address.not_nil!)
+                    # puts "Export Offset: #{to_c_fmnt_hex(export_dir_offset)}"
+                    @img_exp_dir.characteristics              = rawfile[ (export_dir_offset + 0)..(export_dir_offset + 0 + 3 )]      
+                    @img_exp_dir.time_date_stamp              = rawfile[ (export_dir_offset + 4)..(export_dir_offset + 4  + 3 )]      
+                    @img_exp_dir.major_version                = rawfile[ (export_dir_offset + 8)..(export_dir_offset + 8 + 1 )]      
+                    @img_exp_dir.minor_version                = rawfile[ (export_dir_offset + 10)..(export_dir_offset + 10 + 1 )]      
+                    @img_exp_dir.name                         = rawfile[ (export_dir_offset + 12)..(export_dir_offset + 12 + 3 )]      
+                    @img_exp_dir.base                         = rawfile[ (export_dir_offset + 16)..(export_dir_offset + 16 + 3 )]      
+                    @img_exp_dir.number_of_functions          = rawfile[ (export_dir_offset + 20)..(export_dir_offset + 20 + 3 )]      
+                    @img_exp_dir.number_of_names              = rawfile[ (export_dir_offset + 24)..(export_dir_offset + 24 + 3 )]      
+                    @img_exp_dir.address_of_functions         = rawfile[ (export_dir_offset + 28)..(export_dir_offset + 28 + 3 )]      
+                    @img_exp_dir.address_of_names             = rawfile[ (export_dir_offset + 32)..(export_dir_offset + 32 + 3 )]      
+                    @img_exp_dir.address_of_name_ordinals     = rawfile[ (export_dir_offset + 36)..(export_dir_offset + 36 + 3 )]      
+                    
+                    #now resolve the string name of the dll:
+                    @img_exp_dir.name_str     = String.new( rawfile[ resolve_rva_offset(@img_exp_dir.name.not_nil!) .. resolve_rva_offset(@img_exp_dir.name.not_nil!) + 100]).split("\x00").first 
+                    
+                    # now parse out the functions 
+
+                    # these are the base offsets for each of the functions/names/ordinals but those are just arrays of rvas that need to be resolved to get the actual data
+                    export_functions_offset = resolve_rva_offset(@img_exp_dir.address_of_functions.not_nil!) 
+                    # puts "ExportFuncsOffset: #{to_c_fmnt_hex(export_functions_offset)}"
+                    export_name_offset      = resolve_rva_offset(@img_exp_dir.address_of_names.not_nil!)
+                    # puts "ExportNameOffset: #{to_c_fmnt_hex(export_name_offset)}"
+                    export_addr_name_ord_offset = resolve_rva_offset(@img_exp_dir.address_of_name_ordinals.not_nil!) 
+                    # puts "ExportOrdOffset: #{to_c_fmnt_hex(export_addr_name_ord_offset)}"
+                    # puts "" 
+
+                    # we loop through the export name table and populate the @exports list of function exported by our dll
+                    IO::ByteFormat::LittleEndian.decode(Int32,@img_exp_dir.number_of_functions.not_nil!).times do |i| 
+
+                        ef = ExportedFunction.new() # new export function object 
+                        
+                        # now we set the index of it as all functions will have an index
+                        ef.index = i 
+                        ef.ordinal = i + IO::ByteFormat::LittleEndian.decode(Int32,@img_exp_dir.base.not_nil!) # while this is technically correct it is missleading
+                        ef.function_rva = IO::ByteFormat::LittleEndian.decode(Int32, rawfile[ export_functions_offset + (i * 4 ) .. export_functions_offset + (i * 4 ) + 3 ] )
+
+                        # now we loop through all the name offsets to find the correct name..... with the associated ordinal  
+                        IO::ByteFormat::LittleEndian.decode(Int32,@img_exp_dir.number_of_names.not_nil!).times do |i_f|
+                            # ef.ordinal = i + IO::ByteFormat::LittleEndian.decode(Int32,@img_exp_dir.base.not_nil!) # this will always be the case
+                            # the address of our curently selected name offset? 
+                            # ex_name_offset   = resolve_rva_offset(rawfile[ ( export_name_offset + (i*4)          )..( export_name_offset +          (i*4) + 3 ) ] )
+
+                            ex_name_offset   = resolve_rva_offset(rawfile[ ( export_name_offset + (i_f*4)          )..( export_name_offset +          (i_f*4) + 3 ) ] )
+                            # pp ex_name_offset
+                            name_ord = IO::ByteFormat::LittleEndian.decode(Int16, rawfile[ ( export_addr_name_ord_offset + (i_f*2) )..( export_addr_name_ord_offset + (i_f*2) + 1 ) ] )
+                            # pp name_ord
+
+                            if ef.ordinal - IO::ByteFormat::LittleEndian.decode(Int32,@img_exp_dir.base.not_nil!)  == name_ord
+                                ef.name_rva = IO::ByteFormat::LittleEndian.decode(Int32,
+                                                        rawfile[export_name_offset + (i_f * 4 ) .. export_name_offset + (i_f * 4 ) + 4] # the bytes of our name rva 
+                                )
+                                ef.name = String.new( rawfile[( ex_name_offset )..( ex_name_offset +  100)] ).split("\x00").first  
+
+                            end 
+
+
+
+                        end 
+                        
+                        # now we have to check if the thing poited to by our ordinal 
+
+
+
+
+                        ex_func_offset   = resolve_rva_offset(rawfile[ ( export_functions_offset + (i*4)     )..( export_functions_offset +     (i*4) + 3 ) ] )
+
+                        # our function might not be exported by name and therefor the indexing of the lines wont be the same so we need to do a lookup based on the pointer to the address. 
+                        
+                        
+                        ex_addr_name_ord = resolve_rva_offset(rawfile[ ( export_addr_name_ord_offset + (i*4) )..( export_addr_name_ord_offset + (i*4) + 3 ) ] )
+                        
+                        fn_rva_bytes = rawfile[ ( export_name_offset + (i*4) )..( export_name_offset + (i*4) + 3 ) ]
+
+
+
+
+                        @exports << ef 
+                    end
+
+
+                end 
                 # end of parsing export directory 
+                puts "Done Parsing Export Dir"
+
+
+
+
 
 
 
 
                 # Parse the Import Directory here
-
+                puts "Parsing Import Dir"
                 # import addresses are parsed from the ImageImportDescriptors
                 img_imp_desc_offset = resolve_rva_offset(@nt_headers.optional_headers.data_directory.import_directory.not_nil!.virtual_address.not_nil!)
 
@@ -273,7 +541,7 @@ module CrystalPE
                     # add the record to the iat array 
                     @iat << ii 
                 end 
-                
+                puts "Parsing Import Functions"
                 # now load the info for the function in the iat 
                 iat.each do |ii| 
                     name_offset = resolve_rva_offset(ii.image_import_descriptor.name.not_nil!)
@@ -281,7 +549,7 @@ module CrystalPE
                     # puts "DLL Name:    #{String.new(rawfile[name_offset..name_offset + 100 ]).split("\x00").first}"
                     # puts "name_offset: #{to_c_fmnt_hex( name_offset )}"
                     ii.dll_name = String.new(rawfile[name_offset..name_offset + 100 ]).split("\x00").first.to_s
-                    
+                    puts "parsing: #{ii.dll_name}"
                     # get the import lookup table address/offset 
                     ilt_offset = resolve_rva_offset(ii.image_import_descriptor.originalfirstthunk.not_nil!)
                     # puts "ILT offset: #{to_c_fmnt_hex IO::ByteFormat::LittleEndian.decode(Int32,ii.image_import_descriptor.originalfirstthunk.not_nil!) }"
@@ -323,6 +591,9 @@ module CrystalPE
                             # this means we hit the end of the table 
                             if bts == Bytes[0,0,0,0,0,0,0,0] 
                                 break 
+                            else 
+                                # puts "DBG:[ImpFuncTab]: #{to_c_fmnt_hex(bts)} "
+                                # gets 
                             end
                             # i += 1 
 
@@ -349,7 +620,7 @@ module CrystalPE
 
                     # ii.import_names << iibn 
                 end
-
+                puts "Done Parsing Import Dir"
 
                 # end of parsing Import directory 
 
@@ -399,13 +670,13 @@ module CrystalPE
 
 
 
-            
+            puts "End of parsing!"
         end 
 
 
 
 
-# calculate the rva file offset by looping through the sections and finding the section where the iat lives
+        # calculate the rva file offset by looping through the sections and finding the section where the iat lives
         # returns the file offset in an int32 object of th
         def resolve_rva_offset(rva : Bytes) : Int32 
             init_rva = IO::ByteFormat::LittleEndian.decode(Int32, rva ) 
@@ -433,6 +704,111 @@ module CrystalPE
             return ret_offset 
         end 
 
+        # this function updates the dos stub by replacing the parsed section with the supplied bytes. 
+        # it also updates the offsets of the file so it still works correctly. 
+        # This preserves the rich header if there is one. 
+        def update_dos_stub(bytes : Bytes )
+
+        end 
+
+
+        def insert_rich_header(newheader : RichHeader )
+
+        end 
+        
+
+        def update_rich_header(newheader : RichHeader)
+
+        end 
+
+        def insert_section(bytes : Bytes ) 
+        end 
+
+
+        # this function strips out the overlay function from the end of the binary 
+        def strip_overlay()
+            @overlay.bytes = Bytes[]
+        end 
+
+
+
+
+        # if you edit the structure of a pe at all the checksums will be different and need to be updated. 
+        # this should be called manually after making changes before the file is written or used as a whole after changes
+        def update_checksum!()
+            temp = calculate_checksum()
+            puts "DBG: Bytes: #{temp}"
+            @nt_headers.optional_headers.check_sum = temp
+        end 
+
+
+        # calculates and returns a le formatted checksum of the file. 
+        # in theory this should be the same as the optional header checksum
+        def calculate_checksum() : Bytes 
+            checksum  = 0_u64
+            # max = Math.exp2(32)
+            max = 0x100000000_u64
+            current_dword = 0_u32
+
+            # create a copy of our image in memory to loop over 
+            # this isnt actually a thing...
+            # if @overlay.offset > 0 
+            #     # puts "Stopping prior to the overlay"
+            #     temp = to_slice()# [..@overlay.offset - 1 ]
+            # else 
+            #     temp = to_slice()
+            # end 
+            temp = to_slice()
+            sze = temp.size 
+
+            if temp.size % 4 != 0 
+                # allign to 4
+                puts "Not Aligned to 4 bytes... adding padding"
+                temp = (String.new(temp) + "\0"*(4 - (temp.size % 4))).to_slice
+            else 
+                puts "Aligned to 4 bytes!"
+            end
+
+            puts "Temp.size(#{temp.size})/4 : #{temp.size / 4 }"
+           
+            (temp.size / 4 ).to_i.times do |i|
+                # print "DBG: [#{ to_c_fmnt_hex  temp[i*4..i*4+3]}]"
+                # puts "DBG:[i:#{i}]:: #{checksum} "
+                if i == ((@nt_headers.optional_headers.optional_offset + 64) / 4)# 64 is the checksum offset in the opt headers
+                    # puts "hit our previous checksum: #{to_c_fmnt_hex temp[i*4..i*4 + 3] }"
+                    # puts " < Original CheckSum"
+                    puts "Skipping Original Checksum: #{to_c_fmnt_hex IO::ByteFormat::LittleEndian.decode(UInt32,temp[(i*4)..(i*4 + 3)])} : #{to_c_fmnt_hex(temp[(i*4)..(i*4 + 3)])}"
+                    next 
+                end
+                
+                current_dword = IO::ByteFormat::LittleEndian.decode(UInt32,temp[(i*4)..(i*4 + 3)])
+                puts "DWORD: #{current_dword}"
+                
+                checksum = (checksum & 0xFFFFFFFF) + current_dword.to_u64 + (checksum >> 32)
+                if checksum > max 
+                    checksum = (checksum & 0xFFFFFFFF) + (checksum >> 32)
+                end 
+            end
+
+            puts "Checksum: #{checksum}"
+            checksum = (checksum & 0xFFFF) + (checksum >> 16 )
+            puts "After first hit: #{checksum}"
+            checksum = checksum + (checksum >> 16)
+            puts "And second: #{checksum}"
+            checksum = checksum & 0xFFFF
+            
+            # now add the original size (minus padding) to the checksum 
+            checksum = checksum + sze 
+
+            checksum = checksum.to_u32
+            puts "New Checksum in hex: 0x#{to_c_fmnt_hex checksum}"
+            puts "New Checksum in dec: #{ checksum}"
+            # this is downright awful(but it works XD)... :( do better 
+            io = IO::Memory.new() 
+            io.write_bytes(checksum)
+            return io.to_slice
+        end 
+
 
 
         ###################################
@@ -440,7 +816,14 @@ module CrystalPE
         # some basic info about the file 
         # or the bytes supplied 
         ###################################
-
+        def has_exports? 
+            if !@img_exp_dir.number_of_functions.nil?  
+                if IO::ByteFormat::LittleEndian.decode(Int32, @img_exp_dir.number_of_functions.not_nil!) > 0 
+                    return true 
+                end 
+            end 
+            return false 
+        end 
 
         # returns if the file parsed is x64 
         def is64bit? : Bool 
