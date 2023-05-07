@@ -222,8 +222,14 @@ module CrystalPE
                 @nt_headers.signature = rawfile[e_lfanew..(e_lfanew+3)] # should be PE00
                 # @nt_headers.file_headers = NTFileHeaders.new()
                 # @nt_headers.optional_headers = NTOptionalHeaders.new()
-
-                @nt_headers.file_headers.machine                                    = rawfile[(e_lfanew+4)..(e_lfanew+5)]
+                
+                # this will be:
+                #   8664 for amd64 (x64 binary)
+                #   4C01 for Intel386 (x86 binary )
+                #   64AA for arm64 windows (windows 64 bit arm)
+                @nt_headers.file_headers.machine                                    = rawfile[(e_lfanew+4)..(e_lfanew+5)] 
+                
+                
                 @nt_headers.file_headers.number_of_sections                         = rawfile[(e_lfanew+6)..(e_lfanew+7)]
                 @nt_headers.file_headers.time_date_stamp                            = rawfile[(e_lfanew+8)..(e_lfanew+11)]
                 @nt_headers.file_headers.pointer_to_symbol_table                    = rawfile[(e_lfanew+12)..(e_lfanew+15)]
@@ -412,7 +418,7 @@ module CrystalPE
                 # the below blobs parse each section in the data directory 
                 ########################
 
-                puts "Parsing Export directory"
+                # puts "Parsing Export directory"
                 # Parse the Export Directory here
                 if @nt_headers.optional_headers.data_directory.export_directory.not_nil!.virtual_address.not_nil! != Bytes[0,0,0,0,0,0,0,0] # prob should have an export dir before we parse it XD 
 
@@ -501,7 +507,7 @@ module CrystalPE
 
                 end 
                 # end of parsing export directory 
-                puts "Done Parsing Export Dir"
+                # puts "Done Parsing Export Dir"
 
 
 
@@ -511,7 +517,7 @@ module CrystalPE
 
 
                 # Parse the Import Directory here
-                puts "Parsing Import Dir"
+                # puts "Parsing Import Dir"
                 # import addresses are parsed from the ImageImportDescriptors
                 img_imp_desc_offset = resolve_rva_offset(@nt_headers.optional_headers.data_directory.import_directory.not_nil!.virtual_address.not_nil!)
 
@@ -541,7 +547,7 @@ module CrystalPE
                     # add the record to the iat array 
                     @iat << ii 
                 end 
-                puts "Parsing Import Functions"
+                # puts "Parsing Import Functions"
                 # now load the info for the function in the iat 
                 iat.each do |ii| 
                     name_offset = resolve_rva_offset(ii.image_import_descriptor.name.not_nil!)
@@ -578,6 +584,11 @@ module CrystalPE
                                 iibn.hint = rawfile[(iibn_offset)..(iibn_offset+1)] # first 2 bytes are the hint 
                                 iibn.name = String.new(rawfile[(iibn_offset+2)..(iibn_offset+100)]).split("\x00").first
                                 ii.functions << iibn
+                            else # otherwise its being called directly by its ordinal
+                                # puts "bts.last is not 0"
+                                iibo = ImageImportByOrdinal.new()
+                                iibo.ordinal = IO::ByteFormat::LittleEndian.decode(UInt16, bts[0..1])
+                                ii.functions << iibo
                             end 
                             # x = gets 
 
@@ -588,7 +599,8 @@ module CrystalPE
                     elsif is64bit? 
                         while true
                             bts = rawfile[(ilt_offset + (ii.functions.size * 8))..(ilt_offset + (ii.functions.size * 8) + 7) ]
-                            # this means we hit the end of the table 
+                            
+                            # this means we hit the end of the table (kinda)
                             if bts == Bytes[0,0,0,0,0,0,0,0] 
                                 break 
                             else 
@@ -600,11 +612,18 @@ module CrystalPE
                             # puts " First Bytes of #{to_c_fmnt_hex(bts)}"
                             # if the last item is 0 then its using a hint/table so we need to look up the adress of the first 2 bytes
                             if bts.last == 0
+                                # puts "bts.last is 0"
                                 iibn_offset = resolve_rva_offset(bts[0..3]) # this needs to be only the first dword for the address lookup 
                                 iibn = ImageImportByName.new()
                                 iibn.hint = rawfile[(iibn_offset)..(iibn_offset+1)] # first 2 bytes are the hint 
                                 iibn.name = String.new(rawfile[(iibn_offset+2)..(iibn_offset+100)]).split("\x00").first # its a name... so use the first null byte to terminate and use that 
                                 ii.functions << iibn
+
+                            else # otherwise its being called directly by its ordinal
+                                # puts "bts.last is not 0"
+                                iibo = ImageImportByOrdinal.new()
+                                iibo.ordinal = IO::ByteFormat::LittleEndian.decode(UInt16, bts[0..1])
+                                ii.functions << iibo
                             end 
                             # x = gets 
 
@@ -620,7 +639,7 @@ module CrystalPE
 
                     # ii.import_names << iibn 
                 end
-                puts "Done Parsing Import Dir"
+                # puts "Done Parsing Import Dir"
 
                 # end of parsing Import directory 
 
@@ -670,7 +689,7 @@ module CrystalPE
 
 
 
-            puts "End of parsing!"
+            # puts "End of parsing!"
         end 
 
 
@@ -736,9 +755,7 @@ module CrystalPE
         # if you edit the structure of a pe at all the checksums will be different and need to be updated. 
         # this should be called manually after making changes before the file is written or used as a whole after changes
         def update_checksum!()
-            temp = calculate_checksum()
-            puts "DBG: Bytes: #{temp}"
-            @nt_headers.optional_headers.check_sum = temp
+            @nt_headers.optional_headers.check_sum = calculate_checksum()
         end 
 
 
@@ -763,13 +780,13 @@ module CrystalPE
 
             if temp.size % 4 != 0 
                 # allign to 4
-                puts "Not Aligned to 4 bytes... adding padding"
+                # puts "Not Aligned to 4 bytes... adding padding"
                 temp = (String.new(temp) + "\0"*(4 - (temp.size % 4))).to_slice
             else 
-                puts "Aligned to 4 bytes!"
+                # puts "Aligned to 4 bytes!"
             end
 
-            puts "Temp.size(#{temp.size})/4 : #{temp.size / 4 }"
+            # puts "Temp.size(#{temp.size})/4 : #{temp.size / 4 }"
            
             (temp.size / 4 ).to_i.times do |i|
                 # print "DBG: [#{ to_c_fmnt_hex  temp[i*4..i*4+3]}]"
@@ -777,12 +794,12 @@ module CrystalPE
                 if i == ((@nt_headers.optional_headers.optional_offset + 64) / 4)# 64 is the checksum offset in the opt headers
                     # puts "hit our previous checksum: #{to_c_fmnt_hex temp[i*4..i*4 + 3] }"
                     # puts " < Original CheckSum"
-                    puts "Skipping Original Checksum: #{to_c_fmnt_hex IO::ByteFormat::LittleEndian.decode(UInt32,temp[(i*4)..(i*4 + 3)])} : #{to_c_fmnt_hex(temp[(i*4)..(i*4 + 3)])}"
+                    # puts "Skipping Original Checksum: #{to_c_fmnt_hex IO::ByteFormat::LittleEndian.decode(UInt32,temp[(i*4)..(i*4 + 3)])} : #{to_c_fmnt_hex(temp[(i*4)..(i*4 + 3)])}"
                     next 
                 end
                 
                 current_dword = IO::ByteFormat::LittleEndian.decode(UInt32,temp[(i*4)..(i*4 + 3)])
-                puts "DWORD: #{current_dword}"
+                # puts "DWORD: #{current_dword}"
                 
                 checksum = (checksum & 0xFFFFFFFF) + current_dword.to_u64 + (checksum >> 32)
                 if checksum > max 
@@ -790,19 +807,20 @@ module CrystalPE
                 end 
             end
 
-            puts "Checksum: #{checksum}"
+            # puts "Checksum: #{checksum}"
             checksum = (checksum & 0xFFFF) + (checksum >> 16 )
-            puts "After first hit: #{checksum}"
+            # puts "After first hit: #{checksum}"
             checksum = checksum + (checksum >> 16)
-            puts "And second: #{checksum}"
+            # puts "And second: #{checksum}"
             checksum = checksum & 0xFFFF
             
             # now add the original size (minus padding) to the checksum 
             checksum = checksum + sze 
 
             checksum = checksum.to_u32
-            puts "New Checksum in hex: 0x#{to_c_fmnt_hex checksum}"
-            puts "New Checksum in dec: #{ checksum}"
+            # puts "New Checksum in hex: 0x#{to_c_fmnt_hex checksum}"
+            # puts "New Checksum in dec: #{ checksum}"
+
             # this is downright awful(but it works XD)... :( do better 
             io = IO::Memory.new() 
             io.write_bytes(checksum)
