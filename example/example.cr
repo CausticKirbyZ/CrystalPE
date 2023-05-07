@@ -34,10 +34,12 @@ options = {
     :iat => false, 
     :eat => false, 
     :fileinfo => false,
-    :new_file => false 
+    :new_file => false, 
+    :new_dos_stub => false 
 }
 
 filename = "-"
+dos_stub = Bytes[] 
 
 parser = OptionParser.new() do |opts| 
     opts.banner = "x86/x64 Windows PE File parser\nBy: CausticKirbyZ"
@@ -90,6 +92,11 @@ parser = OptionParser.new() do |opts|
 
     opts.on("--new-file", "Writes the modified file to the specified filename") do 
         options[:new_file] = true 
+    end 
+
+    opts.on("--new-dos-stub=[filename]", "Writes the modified file to the specified filename") do |dosfilename|
+        options[:new_dos_stub] = true 
+        dos_stub = File.read(dosfilename).to_slice 
     end 
 
     
@@ -281,14 +288,22 @@ end
 # puts "ImageBase: #{to_c_fmnt_hex(  IO::ByteFormat::LittleEndian.decode(Int64, pefile.nt_headers.optional_headers.image_base.not_nil! ) )}"
 # puts "Number of Sections: #{  IO::ByteFormat::LittleEndian.decode(Int16, pefile.nt_headers.file_headers.number_of_sections.not_nil! ) }"
 
+if options[:new_dos_stub]
+    puts "Updating Dos Stub..."
+    pefile.update_dos_stub!(dos_stub )
+end 
+
+
+
 if options[:new_file]
     puts "Stripping Overlay..."
-    pefile.strip_overlay()
+    pefile.strip_overlay!()
 
-    # puts "Updating checksum... not that it would change as the overlay isnt used to calculate it XD"
+    puts "Updating checksum..."
     pefile.update_checksum!()
     
     puts "Writing File to 'newfile.exe'"
     # pefile.write("newfile.exe")
     File.write("newfile.exe", pefile.to_slice )
+    puts "Done!"
 end 

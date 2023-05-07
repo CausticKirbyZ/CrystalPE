@@ -726,7 +726,26 @@ module CrystalPE
         # this function updates the dos stub by replacing the parsed section with the supplied bytes. 
         # it also updates the offsets of the file so it still works correctly. 
         # This preserves the rich header if there is one. 
-        def update_dos_stub(bytes : Bytes )
+        # for some reason the dos stub MUST be 64 bytes or more.... not entirely sure why... so pad it out
+        def update_dos_stub!(bytes : Bytes )
+            # we need to know the original size so we can adjust the pe offset of e_lfanew
+
+            puts "Original size: #{  @dos_stub.bytes.not_nil!.size }"
+            puts "Original e_lfanew: #{ to_c_fmnt_hex( @dos_header.e_lfanew ) }"
+            if bytes.size <= 64 
+                # dos stub must be 64 bytes or greater if less pad bytes with 0's 
+                @dos_stub.bytes = (String.new(bytes) + "\0"*(64 - bytes.size)).to_slice 
+            else 
+                puts "New Size: #{bytes.size}"
+                og_offset = IO::ByteFormat::LittleEndian.decode(UInt32, @dos_header.e_lfanew.not_nil!)
+                new_offset = (og_offset + bytes.size - @dos_stub.bytes.not_nil!.size)
+                @dos_stub.bytes = bytes 
+                # set our new e_lfanew offset appropriately
+                io = IO::Memory.new()
+                io.write_bytes(new_offset)
+                @dos_header.e_lfanew = io.to_slice 
+                puts "New e_lfanew: #{to_c_fmnt_hex @dos_header.e_lfanew}"
+            end            
 
         end 
 
@@ -745,7 +764,7 @@ module CrystalPE
 
 
         # this function strips out the overlay function from the end of the binary 
-        def strip_overlay()
+        def strip_overlay!()
             @overlay.bytes = Bytes[]
         end 
 
