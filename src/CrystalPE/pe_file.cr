@@ -409,11 +409,6 @@ module CrystalPE
 
 
 
-
-
-
-
-
                 ########################
                 # the below blobs parse each section in the data directory 
                 ########################
@@ -497,10 +492,7 @@ module CrystalPE
                         ex_addr_name_ord = resolve_rva_offset(rawfile[ ( export_addr_name_ord_offset + (i*4) )..( export_addr_name_ord_offset + (i*4) + 3 ) ] )
                         
                         fn_rva_bytes = rawfile[ ( export_name_offset + (i*4) )..( export_name_offset + (i*4) + 3 ) ]
-
-
-
-
+                        
                         @exports << ef 
                     end
 
@@ -555,7 +547,7 @@ module CrystalPE
                     # puts "DLL Name:    #{String.new(rawfile[name_offset..name_offset + 100 ]).split("\x00").first}"
                     # puts "name_offset: #{to_c_fmnt_hex( name_offset )}"
                     ii.dll_name = String.new(rawfile[name_offset..name_offset + 100 ]).split("\x00").first.to_s
-                    puts "parsing: #{ii.dll_name}"
+                    # puts "parsing: #{ii.dll_name}"
                     # get the import lookup table address/offset 
                     ilt_offset = resolve_rva_offset(ii.image_import_descriptor.originalfirstthunk.not_nil!)
                     # puts "ILT offset: #{to_c_fmnt_hex IO::ByteFormat::LittleEndian.decode(Int32,ii.image_import_descriptor.originalfirstthunk.not_nil!) }"
@@ -732,31 +724,56 @@ module CrystalPE
 
             puts "Original size: #{  @dos_stub.bytes.not_nil!.size }"
             puts "Original e_lfanew: #{ to_c_fmnt_hex( @dos_header.e_lfanew ) }"
-            if bytes.size <= 64 
-                # dos stub must be 64 bytes or greater if less pad bytes with 0's 
-                @dos_stub.bytes = (String.new(bytes) + "\0"*(64 - bytes.size)).to_slice 
-            else 
-                puts "New Size: #{bytes.size}"
+            # if bytes.size <= 64 
+            #     # dos stub must be 64 bytes or greater if less pad bytes with 0's 
+            #     @dos_stub.bytes = (String.new(bytes) + "\0"*(64 - bytes.size)).to_slice 
+            # else 
+                puts "Bytes Size: #{bytes.size}"
+                if bytes.size % 4 != 0 
+                    puts "Bytes needs to be divisible by 4... adding paddding"
+                    bytes = (String.new(bytes) + "\0"*(4 - (bytes.size % 4) )).to_slice # the dos stub has to be divisible by 4 so pad if not 
+                end 
                 og_offset = IO::ByteFormat::LittleEndian.decode(UInt32, @dos_header.e_lfanew.not_nil!)
                 new_offset = (og_offset + bytes.size - @dos_stub.bytes.not_nil!.size)
-                @dos_stub.bytes = bytes 
+                @dos_stub.bytes = bytes
                 # set our new e_lfanew offset appropriately
                 io = IO::Memory.new()
                 io.write_bytes(new_offset)
                 @dos_header.e_lfanew = io.to_slice 
                 puts "New e_lfanew: #{to_c_fmnt_hex @dos_header.e_lfanew}"
-            end            
+            # end
 
         end 
 
 
-        def insert_rich_header(newheader : RichHeader )
+        def set_rich_header!(newheader : RichHeader )
+            # first we have to adjust the pe offset in the dos header to reflect our new rich header 
+            cur_offset = IO::ByteFormat::LittleEndian.decode(Int32,@dos_header.e_lfanew.not_nil!)
+            puts "Cur_Offset:#{ to_c_fmnt_hex cur_offset}"
+            # our new offset is our current e_lfanew (which includes the current rich header size if there is one) and the difference between the new header and our current one
+            new_offset = cur_offset + newheader.raw_bytes.size() - @rich_header.raw_bytes.size()
+            puts "New_Offset:#{ to_c_fmnt_hex new_offset}"
+
+            io = IO::Memory.new()
+            io.write_bytes(new_offset)
+            @dos_header.e_lfanew = io.to_slice 
+
+            # update our rich header to the new one
+            @rich_header = newheader 
 
         end 
-        
 
-        def update_rich_header(newheader : RichHeader)
+        def remove_rich_header!()
+            # update our pe offset 
+            cur_size = @rich_header.raw_bytes().size 
+            new_offset 
+            io = IO::Memory.new()
+            io.write_bytes(new_offset)
+            @dos_header.e_lfanew = io.to_slice 
 
+            #now clear out the rich header 
+            @rich_header.bytes = Bytes[]
+            
         end 
 
         def insert_section(bytes : Bytes ) 
@@ -806,12 +823,18 @@ module CrystalPE
             end
 
             # puts "Temp.size(#{temp.size})/4 : #{temp.size / 4 }"
-           
+            optional_offset = IO::ByteFormat::LittleEndian.decode(UInt32,@dos_header.e_lfanew.not_nil! ) + 4 + 20 + 64   # the pe signature befor the file headers 
+                                                                                                        #  + 20 # the file header size
+                                                                                                        #  + 64 # the checksum offset in the 
+            # puts "Offset value: #{to_c_fmnt_hex optional_offset}"
+
+
             (temp.size / 4 ).to_i.times do |i|
                 # print "DBG: [#{ to_c_fmnt_hex  temp[i*4..i*4+3]}]"
                 # puts "DBG:[i:#{i}]:: #{checksum} "
-                if i == ((@nt_headers.optional_headers.optional_offset + 64) / 4)# 64 is the checksum offset in the opt headers
-                    # puts "hit our previous checksum: #{to_c_fmnt_hex temp[i*4..i*4 + 3] }"
+                # if i == ((@nt_headers.optional_headers.optional_offset + 64) / 4)# 64 is the checksum offset in the opt headers
+                if i == optional_offset / 4 
+                    puts "hit our previous checksum: #{to_c_fmnt_hex temp[i*4..i*4 + 3] }"
                     # puts " < Original CheckSum"
                     # puts "Skipping Original Checksum: #{to_c_fmnt_hex IO::ByteFormat::LittleEndian.decode(UInt32,temp[(i*4)..(i*4 + 3)])} : #{to_c_fmnt_hex(temp[(i*4)..(i*4 + 3)])}"
                     next 
@@ -861,6 +884,30 @@ module CrystalPE
             end 
             return false 
         end 
+        
+
+        # returns an array of strings that are human printable(ascii table portions) that are more than 4 characters by default
+        def strings(min_length : Int32 = 4  ) : Array(String)
+            ret = [] of String 
+            # set our temp string 
+            t = "" 
+            String.new(to_slice()).each_char do |c|
+                if c.ord < 127 && c.ord > 32
+                    t = t + c.to_s
+                else 
+                    ret << t unless t.size < min_length 
+                    t = "" 
+                end
+            end
+            return ret 
+        end 
+
+
+        # this function updates the values in the FileHeader section and the Image Export Directory section both set to compile time by default
+        def update_compile_time!(t : Time )
+            @nt_headers.file_headers.set_time_stamp(t)
+            @img_exp_dir.set_time_stamp(t)
+        end 
 
         # returns if the file parsed is x64 
         def is64bit? : Bool 
@@ -904,7 +951,7 @@ module CrystalPE
         # outputs the md5sum of the file 
         def md5 : Bytes 
             d = Digest::MD5.new()
-            d << rawfile 
+            d << to_slice()
             return d.final
         end 
 
@@ -918,7 +965,7 @@ module CrystalPE
         # outputs the sha256sum of the file
         def sha256 : Bytes 
             d = Digest::SHA256.new()
-            d << rawfile 
+            d << to_slice()
             return d.final
         end
         
@@ -932,7 +979,7 @@ module CrystalPE
         # outputs the sha1sum of the file
         def sha1 : Bytes 
             d = Digest::SHA1.new()
-            d << rawfile 
+            d << to_slice()
             return d.final
         end
         
@@ -946,7 +993,7 @@ module CrystalPE
         # outputs the sha512sum of the file
         def sha512 : Bytes 
             d = Digest::SHA512.new()
-            d << rawfile 
+            d << to_slice()
             return d.final
         end
         

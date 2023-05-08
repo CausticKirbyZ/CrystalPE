@@ -14,4 +14,17 @@ class ImageExportDirectory # 40 bytes long
 
     # this property isnt part of the windows stucture but is nice to have it already resolved 
     property name_str                           : String = ""
+    property offset                             : Int32 = 0 
+
+    def set_time_stamp(t : Time )
+        io = IO::Memory.new() 
+        io.write_bytes(t.to_unix.to_i32)
+        @time_date_stamp = io.to_slice 
+    end 
+
+    # this will set the value of the "name" pointed to in the imageExportDir 
+    def set_name(str : String )
+    end
+
+    
 end 

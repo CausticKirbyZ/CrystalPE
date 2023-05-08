@@ -40,6 +40,14 @@ module CrystalPE
             
             return io.to_slice         
         end 
+
+
+        def set_time_stamp(t : Time )
+            io = IO::Memory.new() 
+            io.write_bytes(t.to_unix.to_i32)
+            @time_date_stamp = io.to_slice 
+        end 
+
     end
 
     class NTOptionalHeaders
