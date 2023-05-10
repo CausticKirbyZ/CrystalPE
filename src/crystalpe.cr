@@ -8,4 +8,5 @@ require "./CrystalPE/**"
 
 
 module CrystalPE
+    Log = ::Log.for("CrystalPE")
 end

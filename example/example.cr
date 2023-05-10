@@ -37,10 +37,12 @@ options = {
     :fileinfo => false,
     :new_file => false, 
     :new_dos_stub => false ,
-    :strings => false
+    :strings => false,
+    :dump_overlay => false 
 }
 
 filename = "-"
+overlay_dump_filename = ""
 dos_stub = Bytes[] 
 
 parser = OptionParser.new() do |opts| 
@@ -108,6 +110,11 @@ parser = OptionParser.new() do |opts|
         options[:strings] = true 
     end 
 
+    opts.on("--dump-overlay=[filename]", "Dumps the raw contents of the overlay to the file specified") do |fname| 
+        options[:dump_overlay] = true 
+        overlay_dump_filename = fname
+    end 
+
 
 
 
@@ -163,7 +170,8 @@ end
 if options[:rich_headers]
     if pefile.rich_header 
         puts "Rich Headers: "
-        puts "Raw: #{ to_c_fmnt_hex pefile.rich_header.not_nil!.raw_bytes() }"
+        puts "Raw(peformatted): #{ to_c_fmnt_hex pefile.rich_header.not_nil!.to_pe_slice() }"
+        puts "Raw(unencrypted): #{ to_c_fmnt_hex pefile.rich_header.not_nil!.to_slice() }"
         # pp pefile.rich_header
         puts "> DanS:               #{to_c_fmnt_hex pefile.rich_header.not_nil!.dans_id } | #{String.new pefile.rich_header.not_nil!.dans_id}" # print the hex and the cleartext of this 
         puts "> checksum1:          #{to_c_fmnt_hex pefile.rich_header.not_nil!.checksum_pad1 }"
@@ -360,5 +368,14 @@ if options[:strings]
     puts "Strings:"
     pefile.strings().each do |str| 
         puts "> #{str}" 
+    end 
+end 
+
+if options[:dump_overlay]
+    if overlay_dump_filename != ""
+        puts "Dumping overlay to file: #{overlay_dump_filename}"
+        File.write(overlay_dump_filename, pefile.overlay.bytes)
+    else 
+        puts "Overlay filename cannot be empty/null"
     end 
 end 

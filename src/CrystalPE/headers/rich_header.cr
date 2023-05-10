@@ -54,13 +54,32 @@ module CrystalPE
         # end 
 
 
-        # def update_checksum!(dos_header : Bytes, dos_stub)
-        # end 
+        # returns a byte slice of the rich header. this does not encrypt the values prior to the rich header 
+        # but instead represents them in an unencrypted state 
+        def to_slice() : Bytes 
+            io = IO::Memory.new() 
+            
+            io.write dans_id
+            io.write checksum_pad1
+            io.write checksum_pad2
+            io.write checksum_pad3
+
+            comp_ids.each do |cmp_id| 
+                io.write cmp_id.to_slice
+            end
+            
+            io.write rich_id
+            io.write xor_key
+            io.write padding # this should get dynamically updated here before being returned so it is the correct size 
+
+
+            return io.to_slice
+        end
 
 
 
-        # returns the contents of the rich header in a le formatted byte array 
-        def raw_bytes() : Bytes 
+        # returns the contents of the rich header in a le formatted byte array. all values are correctly formatted and encrypted as represented in a pefile. 
+        def to_pe_slice() : Bytes 
             io = IO::Memory.new() 
             
             io.write xor_crypt(dans_id)
@@ -81,7 +100,7 @@ module CrystalPE
         end
 
         def size() : Int32 
-            return raw_bytes().size
+            return to_slice().size
         end 
 
 

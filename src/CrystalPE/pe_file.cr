@@ -1,32 +1,42 @@
 module CrystalPE
     class PE_File
-        # property rawfile : Bytes = "0x00".to_slice # this is a default of nothing 
-        property rawfile : Bytes = Bytes[] # this is a default of nothing 
+        
+               
+        
+        # todo: Fill out the above table to represent the basic pe file format 
 
-        property dos_header   : DOS_Header    = DOS_Header.new()
-        property dos_stub     : DOS_Stub      = DOS_Stub.new()
-        property rich_header  : RichHeader? = nil #     = RichHeader.new()
+        property dos_header         : DOS_Header                    = DOS_Header.new()
+        property dos_stub           : DOS_Stub                      = DOS_Stub.new()
+        property rich_header        : RichHeader?                   = nil #     = RichHeader.new()
 
-        property nt_headers    : NT_Headers    = NT_Headers.new()
+        property nt_headers         : NT_Headers                    = NT_Headers.new()
         
         # this is kinda like an addressbook/info blob about each section
-        property section_table  : Array(SectionHeader) = [] of SectionHeader
+        property section_table      : Array(SectionHeader)          = [] of SectionHeader
 
         # sections will be where we store the actuall bytes for each section
-        property sections       : Hash(String, Bytes) = Hash(String, Bytes).new()
+        property sections           : Hash(String, Bytes)           = Hash(String, Bytes).new()
 
         # property overlay        : Bytes = Bytes[]
-        property overlay          : Overlay = Overlay.new()
+        property overlay            : Overlay                       = Overlay.new()
 
+
+
+
+
+        #### the below properties are values expressed in the pe file but not as direct blocks in the above depiction of the pe file 
+
+
+        property rawfile : Bytes = Bytes[] # this is a default of nothing 
 
         # Import address table as an array of ImageImportDescriptors
-        # property iat            : Array(ImageImportDescriptor) = [] of ImageImportDescriptor
-        # property eat            : Array
-        property iat            : Array(ImportedInfo) = [] of ImportedInfo
+        property iat                : Array(ImportedInfo)           = [] of ImportedInfo
 
-        property img_exp_dir    : ImageExportDirectory = ImageExportDirectory.new() 
-        property exports        : Array(ExportedFunction) = [] of ExportedFunction
+        property img_exp_dir        : ImageExportDirectory          = ImageExportDirectory.new() 
+        property exports            : Array(ExportedFunction)       = [] of ExportedFunction
 
+
+        property security           : Security                      = Security.new()
 
 
         # takes a filename on new and parses it
@@ -44,7 +54,9 @@ module CrystalPE
 
         # function adds a
         def parse(filename : String)
+            Log.info {"Reading File from disk..."}
             @rawfile = File.read(filename).to_slice
+            Log.info {"Done Reading File From disk."}
             parse
         end 
 
@@ -59,7 +71,7 @@ module CrystalPE
             # File.open(filename, "w") do |fi|
                 io.write @dos_header.raw_bytes()
                 io.write @dos_stub.raw_bytes()
-                io.write @rich_header.not_nil!.raw_bytes() unless @rich_header.nil?
+                io.write @rich_header.not_nil!.to_pe_slice() unless @rich_header.nil?
                 io.write @nt_headers.raw_bytes()
 
                 @section_table.each do |s| 
@@ -102,13 +114,14 @@ module CrystalPE
                 # io = IO::Memory.new @rawfile 
                 # puts "dbg: rawfile[0..1]: |#{String.new(rawfile[0..1]) }|"
                 # puts "dbg: rawfile[0..1]: #{rawfile[0..1] }"
+                Log.info { "Beginning parsing" }
                 if rawfile.size < 96 # smallest recorded pe file i could find online was 97 bytes...
                     raise "Parsing Error! - Size"
                 elsif String.new(rawfile[0..1]) != "MZ"
                     raise "Not a PE File.... 'MZ' != '#{String.new(rawfile[0..1])}'"
                 end 
 
-
+                Log.info { "PEFILE Check Complete. Now Parsing Dos Headers"}
 
                 # This section parses the DOS Header into its structure. its well defined and is 64 bytes long
                 @dos_header.e_magic    = rawfile[0..1]
@@ -130,7 +143,11 @@ module CrystalPE
                 @dos_header.e_oeminfo  = rawfile[38..39]
                 @dos_header.e_res2     = rawfile[40..59]
                 @dos_header.e_lfanew   = rawfile[60..63]
+
+                Log.info { "Dos Header Parsed."}
                 
+
+
                 # set temp so we dont have to use the full var name XD
                 # e_lfanew is the offset of the new exe header (pe header start)
                 e_lfanew = IO::ByteFormat::LittleEndian.decode(Int32, rawfile[60..63] )
@@ -140,7 +157,7 @@ module CrystalPE
                 # dans_offset = ( e_lfanew - 16)
 
 
-
+                Log.info {"Now Parsing DOS Stub/Rich Header"}
                 # puts "DBG: e_lfanew : #{to_c_fmnt_hex( e_lfanew) }"
                 if e_lfanew > 64 
                     # dos stubs and rich headers technically dont need to exist. so only parse them if there is an offset over 64 bytes 
@@ -202,18 +219,19 @@ module CrystalPE
                         
                     # end 
                     # puts "Has Dos Stub or Rich Header!"
-
+                    Log.info { "Detecting and parsing Rich Header" }
                     # new method of parsing 
                     if String.new(rawfile[64..( e_lfanew - 1 )]).includes? "Rich" # if it does contain "Rich"
                         # puts "Found Rich Header!"
+                        Log.info {"RichHeader Found. Now Parsing..."}
                         # provide the dos stub and set it to the 
                         @rich_header = RichHeader.from_dos_stub(rawfile[64..( e_lfanew - 1 )]) 
-                        
+                        Log.info {"Rich Info Parsed"}
                     end 
                 
                     # end of rich header parse 
 
-
+                    Log.info {"Now Parsing Dos Stub"}
 
                     # now we can parse the dos stub here 
                     # we parse it after the rich header as we need to know the length of the rich header if there is one 
@@ -234,10 +252,11 @@ module CrystalPE
                 end 
                 # puts "DosStub: #{to_c_fmnt_hex @dos_stub.bytes}"
                 # end of parsing dos stub 
+                Log.info {"Dos Stub and Rich Header Parsed"}
 
 
 
-
+                Log.info { "Now Parsing PE File headers" }
                 # now parse the nt file headers
                 @nt_headers.signature = rawfile[e_lfanew..(e_lfanew+3)] # should be PE00
                 # @nt_headers.file_headers = NTFileHeaders.new()
@@ -257,6 +276,8 @@ module CrystalPE
                 @nt_headers.file_headers.size_of_optional_header                    = rawfile[(e_lfanew+20)..(e_lfanew+21)]
                 @nt_headers.file_headers.characteristics                            = rawfile[(e_lfanew+22)..(e_lfanew+23)]
 
+                Log.info { "File Headers parsed." }
+                Log.info { "Now Parsing PE Optional Headers" }
                 fh_offset = e_lfanew+24
 
                 # now parse the optional headers 
@@ -336,6 +357,8 @@ module CrystalPE
                 else 
                     raise "Error Optional Bytes indicate a Non X86 or X64 binary. we cant parse this!!!"
                 end 
+                
+                
 
                 # its 16 sets of 2x4 byte chunks so 64 bytes
                 16.times do |i|
@@ -380,8 +403,9 @@ module CrystalPE
                     end 
 
                 end 
+                Log.info {"Finished parsing NT Optional Headers"}
 
-
+                Log.info {"Now parsing Section Headers"}
                 sec_header_offset = dd_offset + ((16*8)) # set up offset based on position +1 of last entry inb data directory 
 
                 # now we parse the section headers
@@ -400,6 +424,7 @@ module CrystalPE
                     t.characteristics           = rawfile[(sec_header_offset + ((i*40) + 32))..(sec_header_offset + ((i*40) + 32 + 7))]
                     section_table << t 
                 end
+                Log.info {"Now parsing sections themselves"}
 
 
 
@@ -420,19 +445,20 @@ module CrystalPE
                     # sections[to_c_fmnt_hex( header.name )] = section 
                     sections[String.new(header.name.not_nil!)] = section
                 end 
+                Log.info {"Sections parsed"}
 
-
+                Log.info {"Parsing overlay now.."}
                 # now grab the overlay it is the chunk of data at the end of the binary 
                 @overlay.bytes = rawfile[endoflastsection_offset..]
                 @overlay.offset = endoflastsection_offset
-
+                Log.info{"DONE Parsing!"}
 
 
 
                 ########################
                 # the below blobs parse each section in the data directory 
                 ########################
-
+                Log.info {"Now Parsing Export Directory"}
                 # puts "Parsing Export directory"
                 # Parse the Export Directory here
                 if @nt_headers.optional_headers.data_directory.export_directory.not_nil!.virtual_address.not_nil! != Bytes[0,0,0,0,0,0,0,0] # prob should have an export dir before we parse it XD 
@@ -518,6 +544,7 @@ module CrystalPE
 
 
                 end 
+                Log.info {"Finished parsing Export Directory"}
                 # end of parsing export directory 
                 # puts "Done Parsing Export Dir"
 
@@ -536,6 +563,8 @@ module CrystalPE
                 # puts "IAT Offset: #{to_c_fmnt_hex(iat_offset)}"
                 # image import descriptors are 20 bytes in size 
                 # we parse the iat by looping untill we find a completely null import descriptor
+                Log.info {"Now parsing Import Directory Table"}
+
                 while true 
                     # create the imported info record for the iat. we will update the names of functions later
                     ii = ImportedInfo.new()
@@ -559,6 +588,7 @@ module CrystalPE
                     # add the record to the iat array 
                     @iat << ii 
                 end 
+                Log.info {"Now parsing Import Table Functions for #{@iat.size} DLL's"}
                 # puts "Parsing Import Functions"
                 # now load the info for the function in the iat 
                 iat.each do |ii| 
@@ -651,10 +681,19 @@ module CrystalPE
 
                     # ii.import_names << iibn 
                 end
+                Log.info {"Done parsing Import functions"}
                 # puts "Done Parsing Import Dir"
 
                 # end of parsing Import directory 
 
+
+
+
+
+                # Parse the Security Directory here
+
+
+                # end of parsing Security Directory 
 
 
 
@@ -666,9 +705,7 @@ module CrystalPE
                 # Parse the Exception Directory here
                 # end of parsing Exception Directory 
 
-                # Parse the Security Directory here
-                # end of parsing Security Directory 
-
+                
                 # Parse the Debug Directory here
                 # end of parsing Debug  Directory 
 
@@ -687,13 +724,10 @@ module CrystalPE
                 # Parse the Bound Import Directory here
                 # end of parsing  Bound Import Directory 
 
-                # Parse the IAT Directory here
-                # end of parsing IAT  Directory 
-
                 # Parse the Delayed Load Import Directory here
                 # end of parsing Delayed Load Import  Directory 
 
-                # Parse the .NET Directory here
+                # Parse the Com/.NET Directory here
                 # end of parsing .NET Directory 
 
 
@@ -769,6 +803,7 @@ module CrystalPE
         def set_rich_header!(newheader : RichHeader )
             # first we have to adjust the pe offset in the dos header to reflect our new rich header 
             cur_offset = IO::ByteFormat::LittleEndian.decode(Int32,@dos_header.e_lfanew.not_nil!)
+
             # puts "Cur_Offset:#{ to_c_fmnt_hex cur_offset}"
             # our new offset is our current e_lfanew (which includes the current rich header size if there is one) and the difference between the new header and our current one
             new_offset = cur_offset + newheader.raw_bytes.size() - @rich_header.raw_bytes.size()
