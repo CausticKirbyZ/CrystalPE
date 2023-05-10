@@ -26,6 +26,7 @@ end
 # set up our option parsing 
 options = {
     :dos => false,
+    :rich_headers => false, 
     :ntheaders => false,
     :optional_headers => false, 
     :data_dirs => false, 
@@ -58,6 +59,9 @@ parser = OptionParser.new() do |opts|
     opts.on("-d", "--dos", "Shows breakdown of DOS Header") do 
         options[:dos] = true 
     end 
+    opts.on("--rich", "Shows breackdown of Rich Headers") do 
+        options[:rich_headers] = true 
+    end 
         
     opts.on("-n", "--nt-headers", "Shows breakdown of NT Headers") do 
         options[:ntheaders] = true 
@@ -65,7 +69,7 @@ parser = OptionParser.new() do |opts|
         
     opts.on("--nt-optional", "Shows breakdown of NT Optional Headers") do 
         options[:optional_headers] = true 
-    end 
+    end  
 
     opts.on("--data-dir", "Shows breakdown of data directory") do 
         options[:data_dirs] = true 
@@ -102,10 +106,8 @@ parser = OptionParser.new() do |opts|
 
     opts.on("--strings", "Prints the output of 'Strings'. Array of strings >= 4 ascii chars long") do 
         options[:strings] = true 
-
     end 
 
-    
 
 
 
@@ -155,6 +157,34 @@ if options[:ntheaders]
     puts "    > Characteristics: #{to_c_fmnt_hex( pefile.nt_headers.file_headers.characteristics)}"
     puts ""
 end 
+
+
+
+if options[:rich_headers]
+    if pefile.rich_header 
+        puts "Rich Headers: "
+        puts "Raw: #{ to_c_fmnt_hex pefile.rich_header.not_nil!.raw_bytes() }"
+        # pp pefile.rich_header
+        puts "> DanS:               #{to_c_fmnt_hex pefile.rich_header.not_nil!.dans_id } | #{String.new pefile.rich_header.not_nil!.dans_id}" # print the hex and the cleartext of this 
+        puts "> checksum1:          #{to_c_fmnt_hex pefile.rich_header.not_nil!.checksum_pad1 }"
+        puts "> checksum2:          #{to_c_fmnt_hex pefile.rich_header.not_nil!.checksum_pad2 }"
+        puts "> checksum3:          #{to_c_fmnt_hex pefile.rich_header.not_nil!.checksum_pad3 }"
+        pefile.rich_header.not_nil!.comp_ids.each do |cid| 
+            puts "    > Value:   #{cid.build_id}.#{cid.prod_id}.#{cid.count} | #{ to_c_fmnt_hex CrystalPE::RichHeader.xor_crypt( cid.to_slice, pefile.rich_header.not_nil!.xor_key ) }"
+            puts "        > BuildID:   #{cid.build_id}"
+            puts "        > ProdID:    #{cid.prod_id} | #{cid.prod_id_string}"
+            puts "        > Count:     #{cid.count}"
+            puts "        > VS Ver:    #{cid.prod_id_vs_version}"
+        end 
+        puts "> Rich ID:            #{to_c_fmnt_hex pefile.rich_header.not_nil!.rich_id} | #{String.new(pefile.rich_header.not_nil!.rich_id)}" # print the hex and cleartext of this 
+        puts "> Parsed Cecksum:     #{ to_c_fmnt_hex pefile.rich_header.not_nil!.xor_key }"
+        puts "> Padding:            #{ to_c_fmnt_hex pefile.rich_header.not_nil!.padding }"
+        # puts "> Calculated Cecksum: #{}"
+    else
+         puts "No Rich Header Detected!"
+    end 
+end 
+
 
 if options[:optional_headers]
     puts "> Optional Headers: "
@@ -307,12 +337,12 @@ if options[:new_file]
     pefile.strip_overlay!()
 
 
-    puts "Updating Rich header..."
-    newheader = CrystalPE::RichHeader.new()
-    # set it to be the rich header pulled from win10 notepad.exe 
-    newheader.bytes = Bytes[0xA2,0x13,0x95,0x77,0xE6,0x72,0xFB,0x24,0xE6,0x72,0xFB,0x24,0xE6,0x72,0xFB,0x24,0xEF,0x0A,0x68,0x24,0xD6,0x72,0xFB,0x24,0xF2,0x19,0xFF,0x25,0xEC,0x72,0xFB,0x24,0xF2,0x19,0xF8,0x25,0xE5,0x72,0xFB,0x24,0xF2,0x19,0xFA,0x25,0xEF,0x72,0xFB,0x24,0xE6,0x72,0xFA,0x24,0xCE,0x77,0xFB,0x24,0xF2,0x19,0xF3,0x25,0xF9,0x72,0xFB,0x24,0xF2,0x19,0xFE,0x25,0xF9,0x72,0xFB,0x24,0xF2,0x19,0x06,0x24,0xE7,0x72,0xFB,0x24,0xF2,0x19,0x04,0x24,0xE7,0x72,0xFB,0x24,0xF2,0x19,0xF9,0x25,0xE7,0x72,0xFB,0x24,0x52,0x69,0x63,0x68,0xE6,0x72,0xFB,0x24,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00]
-    pefile.set_rich_header!(newheader)
-    puts "Done!"
+    # puts "Updating Rich header..."
+    # newheader = CrystalPE::RichHeader.new()
+    # # set it to be the rich header pulled from win10 notepad.exe 
+    # newheader.bytes = Bytes[0xA2,0x13,0x95,0x77,0xE6,0x72,0xFB,0x24,0xE6,0x72,0xFB,0x24,0xE6,0x72,0xFB,0x24,0xEF,0x0A,0x68,0x24,0xD6,0x72,0xFB,0x24,0xF2,0x19,0xFF,0x25,0xEC,0x72,0xFB,0x24,0xF2,0x19,0xF8,0x25,0xE5,0x72,0xFB,0x24,0xF2,0x19,0xFA,0x25,0xEF,0x72,0xFB,0x24,0xE6,0x72,0xFA,0x24,0xCE,0x77,0xFB,0x24,0xF2,0x19,0xF3,0x25,0xF9,0x72,0xFB,0x24,0xF2,0x19,0xFE,0x25,0xF9,0x72,0xFB,0x24,0xF2,0x19,0x06,0x24,0xE7,0x72,0xFB,0x24,0xF2,0x19,0x04,0x24,0xE7,0x72,0xFB,0x24,0xF2,0x19,0xF9,0x25,0xE7,0x72,0xFB,0x24,0x52,0x69,0x63,0x68,0xE6,0x72,0xFB,0x24,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00]
+    # pefile.set_rich_header!(newheader)
+    # puts "Done!"
     # puts "Updating compile time to 10 years ago"
     # pefile.update_compile_time!(Time.local - 10.years )
     

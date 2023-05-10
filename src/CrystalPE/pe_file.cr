@@ -5,7 +5,7 @@ module CrystalPE
 
         property dos_header   : DOS_Header    = DOS_Header.new()
         property dos_stub     : DOS_Stub      = DOS_Stub.new()
-        property rich_header  : RichHeader    = RichHeader.new()
+        property rich_header  : RichHeader? = nil #     = RichHeader.new()
 
         property nt_headers    : NT_Headers    = NT_Headers.new()
         
@@ -59,7 +59,7 @@ module CrystalPE
             # File.open(filename, "w") do |fi|
                 io.write @dos_header.raw_bytes()
                 io.write @dos_stub.raw_bytes()
-                io.write @rich_header.raw_bytes() 
+                io.write @rich_header.not_nil!.raw_bytes() unless @rich_header.nil?
                 io.write @nt_headers.raw_bytes()
 
                 @section_table.each do |s| 
@@ -137,7 +137,7 @@ module CrystalPE
                 
                 # this is misleading and is actually the "Rich" offset but this gets updated later with the correct value. 
                 # needs to be up here to be referenced later
-                dans_offset = ( e_lfanew - 16)
+                # dans_offset = ( e_lfanew - 16)
 
 
 
@@ -149,50 +149,68 @@ module CrystalPE
 
                     # if "Rich" is in the header value 
                     # if rawfile[64..( e_lfanew - 1 )].includes? Bytes[ 0x52, 0x69, 0x63, 0x68 ]
-                    if String.new(rawfile[64..( e_lfanew - 1 )]).includes? "Rich"
-                        # puts "DBG: Contains Rich Header!"
-                        # start at 16 bytes before e_lfanew. there "should" be a "Rich" string then a 4 byte key then 8 bytes of null to end the rich header
-                        rich_key_ending = rawfile[ ( e_lfanew - 16) .. ( e_lfanew - 1) ]
-                        rich = rich_key_ending[0..3]
-                        @rich_header.rich_id = rich_key_ending[0..3] # should be "Rich"
-                        xor_key = rich_key_ending[4..7] # xor key is the next 4 bytes after "Rich"
-                        @rich_header.xor_key = rich_key_ending[4..7] # xor key is the next 4 bytes after "Rich"
-                        ending = rich_key_ending[8..] # followed by an 8 byte string of null(or should be)
-                        puts "DBG: Got Keys and stuff"
+
+                    # old method of parsing 
+                    # if String.new(rawfile[64..( e_lfanew - 1 )]).includes? "Rich" # this is correct as it just looks for the Rich string in the dos stub + rich header.... 
+                    #     # puts "DBG: Contains Rich Header!"
+                    #     # start at 16 bytes before e_lfanew. there "should" be a "Rich" string then a 4 byte key then 8 bytes of null to end the rich header
+                    #     # ^ is common but not 100% accurate.... start at the pe header offset and walk backward until you find "Rich" is more accurate 
+                    #     rich_key_ending = rawfile[ ( e_lfanew - 16) .. ( e_lfanew - 1) ]
+                    #     rich = rich_key_ending[0..3]
+                    #     @rich_header.rich_id = rich_key_ending[0..3] # should be "Rich"
+                    #     xor_key = rich_key_ending[4..7] # xor key is the next 4 bytes after "Rich"
+                    #     @rich_header.xor_key = rich_key_ending[4..7] # xor key is the next 4 bytes after "Rich"
+                    #     ending = rich_key_ending[8..] # followed by an 8 byte string of null(or should be)
+                    #     # puts "DBG: Got Keys and stuff"
 
 
-                        dans = Bytes[]
-                        if String.new(rich) == "Rich"
-                            # puts "DBG: Getting dans_offset: #{dans_offset}"
-                            # walk backward through the offset till we find "DanS"
-                            while true 
-                                # puts "DBG: New dans_offset: #{dans_offset}"
-                                if dans_offset < 1 
-                                    # puts "DBG: Breaking: #{dans_offset}"
-                                    break 
-                                end
+                    #     dans = Bytes[]
+                    #     if String.new(rich) == "Rich"
+                    #         # puts "DBG: Getting dans_offset: #{dans_offset}"
+                    #         # walk backward through the offset till we find "DanS"
+                    #         while true 
+                    #             # puts "DBG: New dans_offset: #{dans_offset}"
+                    #             if dans_offset < 1 
+                    #                 # puts "DBG: Breaking: #{dans_offset}"
+                    #                 break 
+                    #             end
                                 
-                                rich_unxored = String.new( RichHeader.xor_decrypt(rawfile[dans_offset..dans_offset+3], xor_key ) ) 
-                                # puts "DBG: RichXorDeced: #{rich_unxored}"
-                                if  rich_unxored == "DanS"
-                                    dans = rawfile[dans_offset..dans_offset+3] # get our raw bytes 
-                                    @rich_header.dans_id = rawfile[dans_offset..dans_offset+3] # get our raw bytes 
-                                    # puts "DBG: Found DanS Stub"
-                                    break
-                                end 
-                                dans_offset = dans_offset - 4 
-                            end 
-                            @rich_header.bytes = @rawfile[dans_offset..e_lfanew-1]
-                        end 
+                    #             rich_unxored = String.new( RichHeader.xor_crypt(rawfile[dans_offset..dans_offset+3], xor_key ) ) 
+                    #             # puts "DBG: RichXorDeced: #{rich_unxored}"
+                    #             if  rich_unxored == "DanS"
+                    #                 dans = rawfile[dans_offset..dans_offset+3] # get our raw bytes 
+                    #                 @rich_header.dans_id = rawfile[dans_offset..dans_offset+3] # get our raw bytes 
+                    #                 # puts "DBG: Found DanS Stub"
+                    #                 break
+                    #             end 
+                    #             dans_offset = dans_offset - 4 
+                    #         end 
+                    #         @rich_header.dans_id = @rawfile[dans_offset..dans_offset+3]
+                    #         @rich_header.checksum_pad1 = @rawfile[dans_offset+4..dans_offset+7]
+                    #         @rich_header.checksum_pad1 = @rawfile[dans_offset+8..dans_offset+11]
+                    #         @rich_header.checksum_pad1 = @rawfile[dans_offset+12..dans_offset+15]
+                    #         rich_header.
+
+                    #         @rich_header.bytes = @rawfile[dans_offset..e_lfanew-1]
+                    #     end 
                         
-                        puts "Parsed Rich header"
-                        # puts "DBG: Rich:   #{String.new rich}"
-                        # puts "DBG: Key:    #{to_c_fmnt_hex(xor_key ) }"
-                        # puts "DBG: ending: #{to_c_fmnt_hex(ending ) }"
-                        # puts "RichRaw: #{ to_c_fmnt_hex(@rich_header.bytes ) }"
+                    #     puts "Parsed Rich header"
+                    #     # puts "DBG: Rich:   #{String.new rich}"
+                    #     # puts "DBG: Key:    #{to_c_fmnt_hex(xor_key ) }"
+                    #     # puts "DBG: ending: #{to_c_fmnt_hex(ending ) }"
+                    #     # puts "RichRaw: #{ to_c_fmnt_hex(@rich_header.bytes ) }"
+                        
+                    # end 
+                    # puts "Has Dos Stub or Rich Header!"
+
+                    # new method of parsing 
+                    if String.new(rawfile[64..( e_lfanew - 1 )]).includes? "Rich" # if it does contain "Rich"
+                        # puts "Found Rich Header!"
+                        # provide the dos stub and set it to the 
+                        @rich_header = RichHeader.from_dos_stub(rawfile[64..( e_lfanew - 1 )]) 
                         
                     end 
-
+                
                     # end of rich header parse 
 
 
@@ -201,19 +219,21 @@ module CrystalPE
                     # we parse it after the rich header as we need to know the length of the rich header if there is one 
                     # so we can 
                     # dos header is designated as the space between the end of the dos header and the start of the PE headers 
-                    if !@rich_header.bytes.nil?
-                        # dos stub is actually only untill the beginning of the rich header
-                        @dos_stub.bytes = rawfile[64..( dans_offset - 1 )] 
-                    else 
+                    # if !@rich_header.bytes.nil? # old check 
+                    if @rich_header.nil?
+                        # puts "Setting dos stub with no rich header"
                         # this is for those that dont have a rich header
                         # this will also trigger if the "Rich" String is not present. this may be hideable by changing the "Rich" string to something else but the encoding would still be valid 
                         @dos_stub.bytes = rawfile[64..( e_lfanew - 1 )] 
+                    else 
+                        # puts "Setting dos stub but subtracting the rich header"
+                         # dos stub is actually only untill the beginning of the rich header
+                        # @dos_stub.bytes = rawfile[64..( dans_offset - 1 )] # this is the old method of calculating it 
+                       @dos_stub.bytes = rawfile[64..(e_lfanew - 1 - @rich_header.not_nil!.size)]
                     end 
                 end 
+                # puts "DosStub: #{to_c_fmnt_hex @dos_stub.bytes}"
                 # end of parsing dos stub 
-
-
-
 
 
 
@@ -749,10 +769,10 @@ module CrystalPE
         def set_rich_header!(newheader : RichHeader )
             # first we have to adjust the pe offset in the dos header to reflect our new rich header 
             cur_offset = IO::ByteFormat::LittleEndian.decode(Int32,@dos_header.e_lfanew.not_nil!)
-            puts "Cur_Offset:#{ to_c_fmnt_hex cur_offset}"
+            # puts "Cur_Offset:#{ to_c_fmnt_hex cur_offset}"
             # our new offset is our current e_lfanew (which includes the current rich header size if there is one) and the difference between the new header and our current one
             new_offset = cur_offset + newheader.raw_bytes.size() - @rich_header.raw_bytes.size()
-            puts "New_Offset:#{ to_c_fmnt_hex new_offset}"
+            # puts "New_Offset:#{ to_c_fmnt_hex new_offset}"
 
             io = IO::Memory.new()
             io.write_bytes(new_offset)
@@ -763,18 +783,18 @@ module CrystalPE
 
         end 
 
-        def remove_rich_header!()
-            # update our pe offset 
-            cur_size = @rich_header.raw_bytes().size 
-            new_offset 
-            io = IO::Memory.new()
-            io.write_bytes(new_offset)
-            @dos_header.e_lfanew = io.to_slice 
+        # def remove_rich_header!()
+        #     # update our pe offset 
+        #     cur_size = @rich_header.raw_bytes().size 
+        #     new_offset 
+        #     io = IO::Memory.new()
+        #     io.write_bytes(new_offset)
+        #     @dos_header.e_lfanew = io.to_slice 
 
-            #now clear out the rich header 
-            @rich_header.bytes = Bytes[]
+        #     #now clear out the rich header 
+        #     @rich_header.bytes = Bytes[]
             
-        end 
+        # end 
 
         def insert_section(bytes : Bytes ) 
         end 

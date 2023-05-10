@@ -24,7 +24,8 @@ class ImageExportDirectory # 40 bytes long
 
     # this will set the value of the "name" pointed to in the imageExportDir 
     def set_name(str : String )
+        raise "Not Implemented yet"
     end
 
-    
+
 end 
