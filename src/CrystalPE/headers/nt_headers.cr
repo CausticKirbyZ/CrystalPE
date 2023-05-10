@@ -1,7 +1,7 @@
 
 module CrystalPE  
 
-    class NT_Headers
+    class NTHeaders
         property signature                          : Bytes? 
         property file_headers                       : NTFileHeaders =  NTFileHeaders.new()
         property optional_headers                   : NTOptionalHeaders = NTOptionalHeaders.new()

@@ -1,6 +1,6 @@
 module CrystalPE
     # dos header is a 64 Byte header
-    class DOS_Header
+    class DOSHeader
 
         # # each _e... is the actual Byte sequence as it is represented in the file 
         # property _e_magic    : Bytes? # = Bytes[0x0]               # Magic number

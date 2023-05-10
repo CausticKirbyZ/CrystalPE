@@ -1,6 +1,6 @@
 module CrystalPE
     
-    class DOS_Stub 
+    class DOSStub 
         # property stub 
         property bytes : Bytes? 
 

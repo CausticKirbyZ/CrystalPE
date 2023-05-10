@@ -133,15 +133,15 @@ end.parse()
 begin 
     if filename == "-"
         ff = STDIN.getb_to_end()
-        pefile = CrystalPE::PE_File.new(ff)
+        pefile = CrystalPE::PEFile.new(ff)
     else 
-        pefile = CrystalPE::PE_File.new(filename)
+        pefile = CrystalPE::PEFile.new(filename)
     end 
 rescue e 
     puts e.message
     puts "\nParsing error! Is the file actually a PE file?"
     exit 1 
-    pefile = CrystalPE::PE_File.new # base initiate should get us there we are exiting before this anyways XD 
+    pefile = CrystalPE::PEFile.new # base initiate should get us there we are exiting before this anyways XD 
 end 
 
 if options[:dos]

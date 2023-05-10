@@ -1,15 +1,15 @@
 module CrystalPE
-    class PE_File
+    class PEFile
         
                
         
         # todo: Fill out the above table to represent the basic pe file format 
 
-        property dos_header         : DOS_Header                    = DOS_Header.new()
-        property dos_stub           : DOS_Stub                      = DOS_Stub.new()
+        property dos_header         : DOSHeader                     = DOSHeader.new()
+        property dos_stub           : DOSStub                       = DOSStub.new()
         property rich_header        : RichHeader?                   = nil #     = RichHeader.new()
 
-        property nt_headers         : NT_Headers                    = NT_Headers.new()
+        property nt_headers         : NTHeaders                     = NTHeaders.new()
         
         # this is kinda like an addressbook/info blob about each section
         property section_table      : Array(SectionHeader)          = [] of SectionHeader
