@@ -7,4 +7,19 @@
 # Libraries don't need dependency lock
 # Dependencies will be locked in applications that use them
 /shard.lock
-ex.bin
+*.bin
+*.exe
+*.o 
+*.dll 
+*.cpl 
+*.sys 
+
+# ignore any cert files that might be here 
+*.pem 
+*.key 
+*.pkcs 
+*.p11 
+*.p12 
+
+# ignore any databases if any 
+*.db 
