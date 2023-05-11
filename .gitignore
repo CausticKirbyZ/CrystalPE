@@ -7,6 +7,9 @@
 # Libraries don't need dependency lock
 # Dependencies will be locked in applications that use them
 /shard.lock
+
+
+# these are usually binary files dont need to store them 
 *.bin
 *.exe
 *.o 
