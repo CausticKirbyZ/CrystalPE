@@ -1,13 +1,15 @@
 module CrystalPE
 
     class ImageDataDirectory
-        property virtual_address                    : Bytes? 
-        property size                               : Bytes? 
+        property virtual_address                    : UInt32  = 0 
+        property size                               : UInt32  = 0 
 
-        def raw_bytes()
+        def to_slice()
             io = IO::Memory.new() 
-            io.write(virtual_address.not_nil!)
-            io.write(size.not_nil!)
+            IO::ByteFormat::LittleEndian.encode( @virtual_address, io) 
+            IO::ByteFormat::LittleEndian.encode( @size, io) 
+            # io.write(virtual_address.not_nil!)
+            # io.write(size.not_nil!)
             return io.to_slice 
         end 
     end

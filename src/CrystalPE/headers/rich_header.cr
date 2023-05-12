@@ -45,6 +45,31 @@ module CrystalPE
             return value.map_with_index { |vv, i| vv = vv ^ @xor_key[i % @xor_key.size ] }
         end 
 
+        # returns the last index of b inside of a
+        private def rev_ind(a : Bytes, b : Bytes ) : Int32 
+            ind = a.size - b.size - 1 # last index that b would fit in 
+            while ind >= 0 
+              # puts "a[#{ind}]: #{a[ind..ind + b.size - 1 ] } | b: #{b}" 
+              if a[ind..ind + b.size - 1 ] == b 
+                break
+              end 
+              ind = ind - 1 
+            end 
+            return ind 
+        end
+
+        private def self.rev_ind(a : Bytes, b : Bytes ) : Int32 
+            ind = a.size - b.size - 1 # last index that b would fit in 
+            while ind >= 0 
+            #   puts "a[#{ind}]: #{a[ind..ind + b.size - 1 ] } | b: #{b}" 
+              if a[ind..ind + b.size - 1 ] == b 
+                break
+              end 
+              ind = ind - 1 
+            end 
+            return ind 
+        end
+
         
 
 
@@ -113,9 +138,16 @@ module CrystalPE
             
             
             # identify the last index of the "Rich" value 
-            rich_index = String.new(dos_stub).rindex("Rich")
+            # rich_index = String.new(dos_stub).rindex("Rich")
+            # rindex is broken with strings and how it parses resulting in inconsistent/inacurate results at times. 
+            # use internal function for this 
+            rich_index = rev_ind(dos_stub, "Rich".to_slice)
+            
+            # rich_index = dos_stub.rindex(Bytes[0x52, 0x69, 0x63, 0x68])
+            Log.trace {"rich_index: #{rich_index}"}
             if rich_index 
                 # puts "Index of last Rich value: #{ rich_index }"
+
                 ret.rich_id = dos_stub[rich_index..rich_index + 3 ]
                 ret.xor_key = dos_stub[rich_index+4..rich_index + 7 ]
                 ret.padding = dos_stub[rich_index + 8 .. ] # the padding is the rest of the dos stub till the end of the pe headers 
@@ -127,7 +159,9 @@ module CrystalPE
                         break 
                     end 
                     stub = xor_crypt( dos_stub[dans_index..dans_index + 3 ], ret.xor_key )
+                    Log.trace { "Rich Stub:  #{to_c_fmnt_hex dos_stub[dans_index..dans_index + 3 ] } -xor(#{to_c_fmnt_hex ret.xor_key})-> #{to_c_fmnt_hex stub } = String->#{ String.new(stub ) }" }
                     if String.new( stub ) == "DanS"
+                        Log.debug {"Found DanS"}
                         ret.dans_id = stub 
                         break # break so we dont decrement the index after we found it 
                     end 
@@ -156,6 +190,62 @@ module CrystalPE
             return ret
         end 
 
+        # returns a richg header object parsed from a section of bytes. 
+        # if supplying your own NEED to recalculate the xor key to be correct as 
+        # it will have likely changed from the original file. 
+        def self.from_bytes(rich_stub : Bytes ) : RichHeader 
+            # cretae a new rich header for the return value
+            ret = RichHeader.new() 
+
+            # identify the last index of the "Rich" value 
+            # rich_index = String.new(rich_stub).rindex("Rich")
+
+            # rindex is broken with strings and how it parses resulting in inconsistent/inacurate results at times. 
+            # use internal function for this 
+            rich_index = rev_ind(rich_stub, "Rich".to_slice)
+
+            if rich_index 
+                # puts "Index of last Rich value: #{ rich_index }"
+                ret.rich_id = rich_stub[rich_index..rich_index + 3 ]
+                ret.xor_key = rich_stub[rich_index+4..rich_index + 7 ]
+                ret.padding = rich_stub[rich_index + 8 .. ] # the padding is the rest of the dos stub till the end of the pe headers 
+
+                # now walk backward through the dos stub from the rich header until you find the unencrypted DanS block 
+                dans_index = rich_index - 4 #start from the 4 byte block before the rich stub 
+                while true 
+                    if dans_index < 1  # cant have any out of bounds errors XD 
+                        break 
+                    end 
+                    stub = xor_crypt( rich_stub[dans_index..dans_index + 3 ], ret.xor_key )
+                    if String.new( stub ) == "DanS"
+                        ret.dans_id = stub 
+                        break # break so we dont decrement the index after we found it 
+                    end 
+                    dans_index = dans_index - 4 
+                end 
+
+                # now we can start at dans + 4 for the first checksum pad value 
+                fpad_check_index = dans_index + 4 
+                ret.checksum_pad1 = rich_stub[ fpad_check_index .. fpad_check_index + 3 ] 
+                ret.checksum_pad2 = rich_stub[ fpad_check_index + 4 .. fpad_check_index + 7 ] 
+                ret.checksum_pad3 = rich_stub[ fpad_check_index + 8 .. fpad_check_index + 11 ] 
+
+
+                # now we have to parse the comp_id values 
+                comp_id_1_index = fpad_check_index + 12 
+                comp_id_block = rich_stub[comp_id_1_index .. rich_index - 1 ] # the comp_id's are the block between the last checksum pad and the rich header 
+                # puts "comp_id_block_size: #{comp_id_block.size}"
+                (comp_id_block.size / 8 ).to_i.times do |i| # loop through the divided chunks (they are 8 bytes large or 64 bits ), unencrypt and add to the rich header entry list 
+                    # re = RichHeaderEntry.new()
+                    ind = i*8
+                    re = RichHeaderEntry.from_bytes( xor_crypt( comp_id_block[ind .. ind+7], ret.xor_key )  ) 
+                    ret.comp_ids << re 
+                end 
+            end 
+            return ret
+
+
+        end 
         
         # parss a a set of `Bytes` and interprets it as a rich header. This accepts a Bytes object that should represent the entire rich header bytes. 
         def self.parse(bytes : Bytes ) : RichHeader
@@ -491,31 +581,51 @@ module CrystalPE
         end 
 
         def prod_id_vs_version() : String 
-            if @prod_id > 0x010e 
-                return ""
-            elsif @prod_id >= 0x00fd && @prod_id < 0x010e+1 
-                return "Visual Studio 2015 14.00"
-            elsif @prod_id >= 0x00eb && @prod_id < 0x00fd 
-                return "Visual Studio 2013 12.10"
-            elsif @prod_id >= 0x00d9 && @prod_id < 0x00eb 
-                return "Visual Studio 2013 12.00"
-            elsif @prod_id >= 0x00c7 && @prod_id < 0x00d9 
-                return "Visual Studio 2012 11.00"
-            elsif @prod_id >= 0x00b5 && @prod_id < 0x00c7 
-                return "Visual Studio 2010 10.10"
-            elsif @prod_id >= 0x0098 && @prod_id < 0x00b5 
-                return "Visual Studio 2010 10.00"
-            elsif @prod_id >= 0x0083 && @prod_id < 0x0098 
-                return "Visual Studio 2008 09.00"
-            elsif @prod_id >= 0x006d && @prod_id < 0x0083 
-                return "Visual Studio 2005 08.00"
-            elsif @prod_id >= 0x005a && @prod_id < 0x006d 
-                return "Visual Studio 2003 07.10"
-            elsif @prod_id == 1
-                return "Visual Studio"
-            else 
-                return "<unknown>"
-            end
+            # if @prod_id > 0x010e 
+            #     return ""
+            # elsif @prod_id 
+            # elsif @prod_id >= 0x00fd && @prod_id < 0x010e+1 
+            #     return "Visual Studio 2015 14.00"
+            # elsif @prod_id >= 0x00eb && @prod_id < 0x00fd 
+            #     return "Visual Studio 2013 12.10"
+            # elsif @prod_id >= 0x00d9 && @prod_id < 0x00eb 
+            #     return "Visual Studio 2013 12.00"
+            # elsif @prod_id >= 0x00c7 && @prod_id < 0x00d9 
+            #     return "Visual Studio 2012 11.00"
+            # elsif @prod_id >= 0x00b5 && @prod_id < 0x00c7 
+            #     return "Visual Studio 2010 10.10"
+            # elsif @prod_id >= 0x0098 && @prod_id < 0x00b5 
+            #     return "Visual Studio 2010 10.00"
+            # elsif @prod_id >= 0x0083 && @prod_id < 0x0098 
+            #     return "Visual Studio 2008 09.00"
+            # elsif @prod_id >= 0x006d && @prod_id < 0x0083 
+            #     return "Visual Studio 2005 08.00"
+            # elsif @prod_id >= 0x005a && @prod_id < 0x006d 
+            #     return "Visual Studio 2003 07.10"
+            # elsif @prod_id == 1
+            #     return "Visual Studio"
+            # else 
+            #     return "<unknown>"
+            # end
+
+
+            # based on https://github.com/hasherezade/bearparser/blob/master/parser/pe/RichHdrWrapper.cpp
+            i = @prod_id 
+            return "Visual Studio 2017 14.01+" if (i >= 0x0106 && i < (0x010a + 1))
+            return "Visual Studio 2015 14.00"  if (i >= 0x00fd && i < (0x0106))
+            return "Visual Studio 2013 12.10"  if (i >= 0x00eb && i < 0x00fd)
+            return "Visual Studio 2013 12.00"  if (i >= 0x00d9 && i < 0x00eb)
+            return "Visual Studio 2012 11.00"  if (i >= 0x00c7 && i < 0x00d9)
+            return "Visual Studio 2010 10.10"  if (i >= 0x00b5 && i < 0x00c7)
+            return "Visual Studio 2010 10.00"  if (i >= 0x0098 && i < 0x00b5)
+            return "Visual Studio 2008 09.00"  if (i >= 0x0083 && i < 0x0098)
+            return "Visual Studio 2005 08.00"  if (i >= 0x006d && i < 0x0083)
+            return "Visual Studio 2003 07.10"  if (i >= 0x005a && i < 0x006d)
+            return "Visual Studio 2002 07.00"  if (i >= 0x0019 && i < (0x0045 + 1))
+            return "Visual Studio 6.0 06.00"   if (i == 0xA || i == 0xB || i == 0xD || i == 0x15 || i == 0x16 )
+            return "Visual Studio 97 05.00"    if (i == 0x2 || i == 0x6 || i == 0xC || i == 0xE)
+            return "Visual Studio"             if (i == 1)
+            return ""
         end 
 
     end

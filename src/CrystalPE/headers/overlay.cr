@@ -4,7 +4,7 @@ module CrystalPE
         property bytes : Bytes = Bytes[]
 
         # set to -1 by default 
-        property offset : Int32 = -1 
+        property offset : UInt32|Int32 = -1 
 
     end 
 end 

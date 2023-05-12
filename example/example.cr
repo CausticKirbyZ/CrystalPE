@@ -38,12 +38,21 @@ options = {
     :new_file => false, 
     :new_dos_stub => false ,
     :strings => false,
-    :dump_overlay => false 
+    :dump_overlay => false, 
+    :dot_net_info => false,
+
+    :verbosity_1 => false, 
+    :verbosity_2 => false, 
+    :verbosity_3 => false, 
+    :verbosity_4 => false, 
+    :verbosity_5 => false, 
 }
 
 filename = "-"
 overlay_dump_filename = ""
+new_file_path = "newfile.exe"
 dos_stub = Bytes[] 
+Log.setup(:warn)
 
 parser = OptionParser.new() do |opts| 
     opts.banner = "x86/x64 Windows PE File parser\nBy: CausticKirbyZ"
@@ -97,8 +106,9 @@ parser = OptionParser.new() do |opts|
         options[:fileinfo] = true 
     end 
 
-    opts.on("--new-file", "Writes the modified file to the specified filename") do 
+    opts.on("--new-file=[filename]", "Writes the modified file to the specified filename") do |fname|
         options[:new_file] = true 
+        new_file_path = fname
     end 
 
     opts.on("--new-dos-stub=[filename]", "Writes the modified file to the specified filename") do |dosfilename|
@@ -115,6 +125,30 @@ parser = OptionParser.new() do |opts|
         overlay_dump_filename = fname
     end 
 
+    opts.on("--dot-net-info", "Dumps the raw contents of the overlay to the file specified") do 
+        options[:dot_net_info] = true 
+    end 
+
+    opts.on("-v", "Verbosity level 1") do
+        options[:verbosity_1] = true 
+    end 
+
+    opts.on("-vv", "Verbosity level 2") do
+        options[:verbosity_2] = true 
+    end 
+
+    opts.on("-vvv", "Verbosity level 3") do
+        options[:verbosity_3] = true 
+    end 
+
+    opts.on("-vvvv", "Verbosity level 4") do
+        options[:verbosity_4] = true 
+    end 
+
+    opts.on("-vvvvv", "Verbosity level 5") do
+        options[:verbosity_5] = true 
+    end 
+
 
 
 
@@ -129,6 +163,24 @@ parser = OptionParser.new() do |opts|
     end 
 
 end.parse()
+
+
+if options[:verbosity_1]
+    Log.setup(:warn)
+end 
+if options[:verbosity_2]
+    Log.setup(:notice)
+end 
+if options[:verbosity_3]
+    Log.setup(:info)
+end 
+if options[:verbosity_4]
+    Log.setup(:debug)
+end 
+if options[:verbosity_5]
+    Log.setup(:trace)
+end 
+
 
 begin 
     if filename == "-"
@@ -254,15 +306,21 @@ end
 if options[:section_headers]
     puts "> Section Headers: "
     pefile.section_table.each do |header| 
-        puts "    > Section: #{String.new(header.name.not_nil!) unless header.name.nil?}"
+        # puts "    > Section: #{String.new(header.name.not_nil!) unless header.name.nil?}"
+        puts "    > Section: #{header.name_as_string unless header.name == 0 }"
         puts "        > Name: #{ to_c_fmnt_hex( header.name ) }"
         puts "        > Misc(vsize/physaddr): #{ to_c_fmnt_hex( header.misc ) }"
-        puts "        > VirtualAddress: #{ to_c_fmnt_hex( header.virtual_address ) } : #{to_c_fmnt_hex( IO::ByteFormat::LittleEndian.decode(Int32,header.virtual_address.not_nil!) )}"
-        puts "        > Size of Raw Data: #{ to_c_fmnt_hex( header.size_of_raw_data ) } : #{ to_c_fmnt_hex( IO::ByteFormat::LittleEndian.decode(Int32,header.size_of_raw_data.not_nil! ) )}"
-        puts "        > Ptr to Raw Data: #{ to_c_fmnt_hex( header.pointer_to_raw_data ) } : #{ to_c_fmnt_hex( IO::ByteFormat::LittleEndian.decode(Int32,header.pointer_to_raw_data.not_nil!)) }"
-        puts "        > # of Relocations: #{ to_c_fmnt_hex( header.number_of_relocations ) }  : #{ to_c_fmnt_hex( IO::ByteFormat::LittleEndian.decode(Int16,header.number_of_relocations.not_nil!)) }"
-        puts "        > # of Linenumbers: #{ to_c_fmnt_hex( header.number_of_linenumber ) }  : #{ to_c_fmnt_hex( IO::ByteFormat::LittleEndian.decode(Int16,header.number_of_linenumber.not_nil! ) ) }"
-        puts "        > Characteristics: #{ to_c_fmnt_hex( header.characteristics ) }"
+        # puts "        > VirtualAddress: #{ to_c_fmnt_hex( header.virtual_address ) } : #{to_c_fmnt_hex( IO::ByteFormat::LittleEndian.decode(Int32,header.virtual_address.not_nil!) )}"
+        # puts "        > Size of Raw Data: #{ to_c_fmnt_hex( header.size_of_raw_data ) } : #{ to_c_fmnt_hex( IO::ByteFormat::LittleEndian.decode(Int32,header.size_of_raw_data.not_nil! ) )}"
+        # puts "        > Ptr to Raw Data: #{ to_c_fmnt_hex( header.pointer_to_raw_data ) } : #{ to_c_fmnt_hex( IO::ByteFormat::LittleEndian.decode(Int32,header.pointer_to_raw_data.not_nil!)) }"
+        # puts "        > # of Relocations: #{ to_c_fmnt_hex( header.number_of_relocations ) }  : #{ to_c_fmnt_hex( IO::ByteFormat::LittleEndian.decode(Int16,header.number_of_relocations.not_nil!)) }"
+        # puts "        > # of Linenumbers: #{ to_c_fmnt_hex( header.number_of_linenumber ) }  : #{ to_c_fmnt_hex( IO::ByteFormat::LittleEndian.decode(Int16,header.number_of_linenumber.not_nil! ) ) }"
+        puts "        > VirtualAddress:   #{ to_c_fmnt_hex( header.virtual_address )        } : #{ to_c_fmnt_hex( header.virtual_address)        }"
+        puts "        > Size of Raw Data: #{ to_c_fmnt_hex( header.size_of_raw_data )       } : #{ to_c_fmnt_hex( header.size_of_raw_data )      }"
+        puts "        > Ptr to Raw Data:  #{ to_c_fmnt_hex( header.pointer_to_raw_data )    } : #{ to_c_fmnt_hex( header.pointer_to_raw_data)    }"
+        puts "        > # of Relocations: #{ to_c_fmnt_hex( header.number_of_relocations )  } : #{ to_c_fmnt_hex( header.number_of_relocations)  }"
+        puts "        > # of Linenumbers: #{ to_c_fmnt_hex( header.number_of_linenumber )   } : #{ to_c_fmnt_hex( header.number_of_linenumber )  }"
+        puts "        > Characteristics:  #{ to_c_fmnt_hex( header.characteristics ) }"
     end 
     puts ""
 end 
@@ -334,34 +392,12 @@ end
 
 if options[:new_dos_stub]
     puts "Updating Dos Stub..."
-    pefile.update_dos_stub!(dos_stub )
+    pefile.update_dos_stub!(dos_stub)
     # pefile.update_checksum!
 end 
 
 
 
-if options[:new_file]
-    puts "Stripping Overlay..."
-    pefile.strip_overlay!()
-
-
-    # puts "Updating Rich header..."
-    # newheader = CrystalPE::RichHeader.new()
-    # # set it to be the rich header pulled from win10 notepad.exe 
-    # newheader.bytes = Bytes[0xA2,0x13,0x95,0x77,0xE6,0x72,0xFB,0x24,0xE6,0x72,0xFB,0x24,0xE6,0x72,0xFB,0x24,0xEF,0x0A,0x68,0x24,0xD6,0x72,0xFB,0x24,0xF2,0x19,0xFF,0x25,0xEC,0x72,0xFB,0x24,0xF2,0x19,0xF8,0x25,0xE5,0x72,0xFB,0x24,0xF2,0x19,0xFA,0x25,0xEF,0x72,0xFB,0x24,0xE6,0x72,0xFA,0x24,0xCE,0x77,0xFB,0x24,0xF2,0x19,0xF3,0x25,0xF9,0x72,0xFB,0x24,0xF2,0x19,0xFE,0x25,0xF9,0x72,0xFB,0x24,0xF2,0x19,0x06,0x24,0xE7,0x72,0xFB,0x24,0xF2,0x19,0x04,0x24,0xE7,0x72,0xFB,0x24,0xF2,0x19,0xF9,0x25,0xE7,0x72,0xFB,0x24,0x52,0x69,0x63,0x68,0xE6,0x72,0xFB,0x24,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00]
-    # pefile.set_rich_header!(newheader)
-    # puts "Done!"
-    # puts "Updating compile time to 10 years ago"
-    # pefile.update_compile_time!(Time.local - 10.years )
-    
-    puts "Updating checksum..."
-    pefile.update_checksum!()
-
-    puts "Writing File to 'newfile.exe'"
-    # pefile.write("newfile.exe")
-    File.write("newfile.exe", pefile.to_slice )
-    puts "Done!"
-end 
 
 
 if options[:strings]
@@ -378,4 +414,72 @@ if options[:dump_overlay]
     else 
         puts "Overlay filename cannot be empty/null"
     end 
+end 
+
+
+if options[:dot_net_info]
+    if !pefile.dot_net_header.nil?
+        puts "DotNetInfo:                            Dec/val | Hex val"
+        puts "> Cb:                                  #{ to_c_fmnt_hex pefile.dot_net_header.not_nil!.cb                                 }"
+        puts "> MajorRuntimeVersion:                 #{ pefile.dot_net_header.not_nil!.major_runtime_version              }"
+        puts "> MinorRuntimeVersion:                 #{ pefile.dot_net_header.not_nil!.minor_runtime_version              }"
+        puts "> MetaData.va:                         #{ pefile.dot_net_header.not_nil!.meta_data_va                       }"
+        puts "> MetaData.size:                       #{ pefile.dot_net_header.not_nil!.meta_data_va                       } | 0x#{ to_c_fmnt_hex pefile.dot_net_header.not_nil!.meta_data_va         }"
+        puts "> Flags:                               #{ pefile.dot_net_header.not_nil!.flags                              }"
+        puts "> entry_point_token:                   #{ to_c_fmnt_hex pefile.dot_net_header.not_nil!.entry_point_token                  }"
+        puts "> Resources.va:                        #{ to_c_fmnt_hex pefile.dot_net_header.not_nil!.resources_va                       }"
+        puts "> Resources.size:                      #{ pefile.dot_net_header.not_nil!.resources_size                     } | 0x#{ to_c_fmnt_hex pefile.dot_net_header.not_nil!.resources_size                     }"
+        puts "> StrongNameSignature.va:              #{ to_c_fmnt_hex pefile.dot_net_header.not_nil!.strong_name_signature_va           }"
+        puts "> StrongNameSignature.size:            #{ pefile.dot_net_header.not_nil!.strong_name_signature_size         } | 0x#{ to_c_fmnt_hex pefile.dot_net_header.not_nil!.strong_name_signature_size         }"
+        puts "> CodeManagerTable.va:                 #{ to_c_fmnt_hex pefile.dot_net_header.not_nil!.code_manager_table_va              }"
+        puts "> CodeManagerTable.size:               #{ pefile.dot_net_header.not_nil!.code_manager_table_size            } | 0x#{ to_c_fmnt_hex pefile.dot_net_header.not_nil!.code_manager_table_size            }"
+        puts "> VTableFixups.va:                     #{ to_c_fmnt_hex pefile.dot_net_header.not_nil!.v_table_fixups_va                  }"
+        puts "> VTableFixups.size:                   #{ pefile.dot_net_header.not_nil!.v_table_fixups_size                 } | 0x#{ to_c_fmnt_hex pefile.dot_net_header.not_nil!.v_table_fixups_size                }"
+        puts "> Export_Address_table_jumps.va:       #{ to_c_fmnt_hex pefile.dot_net_header.not_nil!.export_address_table_jumps_va     }"
+        puts "> Export_Address_TableJumps.size:      #{ pefile.dot_net_header.not_nil!.export_asddress_table_jumps_size    } | 0x#{ to_c_fmnt_hex pefile.dot_net_header.not_nil!.export_asddress_table_jumps_size   }"
+        puts "> Manage_native_header_va:             #{ to_c_fmnt_hex pefile.dot_net_header.not_nil!.manage_native_header_va  }"
+        puts "> Managed_native_header_size:          #{ pefile.dot_net_header.not_nil!.managed_native_header_size         } | 0x#{ to_c_fmnt_hex pefile.dot_net_header.not_nil!.managed_native_header_size         }"
+    end 
+end 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+if options[:new_file]
+    # puts "Stripping Overlay..."
+    # pefile.strip_overlay!()
+
+    # dos_stub = Bytes[0,0,0,0]
+    # pefile.update_dos_stub!(dos_stub)
+
+    # puts "Updating Rich header..."
+    # newheader = CrystalPE::RichHeader.new()
+    # set it to be the rich header pulled from win10 notepad.exe 
+    # newheader = CrystalPE::RichHeader.from_bytes Bytes[0xA2,0x13,0x95,0x77,0xE6,0x72,0xFB,0x24,0xE6,0x72,0xFB,0x24,0xE6,0x72,0xFB,0x24,0xEF,0x0A,0x68,0x24,0xD6,0x72,0xFB,0x24,0xF2,0x19,0xFF,0x25,0xEC,0x72,0xFB,0x24,0xF2,0x19,0xF8,0x25,0xE5,0x72,0xFB,0x24,0xF2,0x19,0xFA,0x25,0xEF,0x72,0xFB,0x24,0xE6,0x72,0xFA,0x24,0xCE,0x77,0xFB,0x24,0xF2,0x19,0xF3,0x25,0xF9,0x72,0xFB,0x24,0xF2,0x19,0xFE,0x25,0xF9,0x72,0xFB,0x24,0xF2,0x19,0x06,0x24,0xE7,0x72,0xFB,0x24,0xF2,0x19,0x04,0x24,0xE7,0x72,0xFB,0x24,0xF2,0x19,0xF9,0x25,0xE7,0x72,0xFB,0x24,0x52,0x69,0x63,0x68,0xE6,0x72,0xFB,0x24,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00]
+    # pefile.set_rich_header!(newheader)
+
+    
+
+    # puts "Done!"
+    # puts "Updating compile time to 10 years ago"
+    # pefile.update_compile_time!(Time.local - 10.years )
+    
+    puts "Updating checksum..."
+    pefile.update_checksum!()
+
+    puts "Writing File to 'newfile.exe'"
+    # pefile.write("newfile.exe")
+    File.write(new_file_path, pefile.to_slice )
+    puts "Done!"
 end 
