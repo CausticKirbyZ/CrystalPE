@@ -2,41 +2,20 @@ module CrystalPE
 
 
     # PEFile is the main class object for parsing and working with PE Files. 
-    #     
-    # +-----------------+
-    # | DOS Header      |
-    # +-----------------+
-    # | DOS Stub        |
-    # +-----------------+
-    # | PE Signature    |
-    # +-----------------+
-    # | COFF Header     |
-    # +-----------------+
-    # | Optional Header |
-    # +-----------------+
-    # | Section 1       |
-    # +-----------------+
-    # | Section 2       |
-    # +-----------------+
-    # | ...             |
-    # +-----------------+
-    # | Section N       |
-    # +-----------------+
-    # | Overlay         |
-    # +-----------------+
     #
-    # Crytal table of dos header:  
+    # Example of PE file as a table:  
     # ```markdown
-    # | DOS Header      | 
-    # | DOS Stub        | 
-    # | PE Signature    |
-    # | COFF Header     |
-    # | Optional Header |
-    # | Section 1       |
-    # | Section 2       |
-    # | ...             |
-    # | Section N       |
-    # | Overlay         |
+    # | DOS Header          | 
+    # | DOS Stub/RichHeader | 
+    # | PE Signature        |
+    # | COFF Header         |
+    # | Optional Header     |
+    # | Section Header      |
+    # | Section 1           |
+    # | Section 2           |
+    # | ...                 |
+    # | Section N           |
+    # | Overlay             |
     # ```
     # ## Example: 
     # ```
@@ -82,6 +61,39 @@ module CrystalPE
         property security           : Security? #                       = Security.new()
         property dot_net_header     : DotNetHeader? 
 
+        property resources          : Image_Resource_Directory? 
+        # property resources  : Resources? 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
         # takes a filename on new and parses it
         def initialize(filename : String) 
             parse(filename)
@@ -106,52 +118,6 @@ module CrystalPE
         def parse(filebts : Bytes )
             @rawfile = filebts 
             parse 
-        end 
-
-        # returns the pefile as a byte array. good for writing to a file 
-        def to_slice( ) : Bytes 
-            io = IO::Memory.new() 
-            # File.open(filename, "w") do |fi|
-                io.write @dos_header.raw_bytes()
-                io.write @dos_stub.raw_bytes()
-                io.write @rich_header.not_nil!.to_pe_slice() unless @rich_header.nil?
-                io.write @nt_headers.raw_bytes()
-
-                @section_table.each do |s| 
-                    io.write s.raw_bytes()
-                end 
-
-                # now we have to ensure the file is aligned properly
-                # this is done by adding padding between the section header and the first section 
-                # to ensure the first section starts at the beginning of a multiple of the file alignment.
-                # file alignment size can be found at the optional header value of "FileAlignment often at offset #BC"
-                # this file padding is done with all null bytes but technically it could be anything. 
-
-                # puts "Current Pos: #{io.pos}"       
-                # puts "Offset Hex:  #{to_c_fmnt_hex(@nt_headers.optional_headers.file_alignment.not_nil!) }"         
-                # puts "Offset Dec:  #{IO::ByteFormat::LittleEndian.decode(Int32,@nt_headers.optional_headers.file_alignment.not_nil!) }"         
-                # puts "Difference:  #{IO::ByteFormat::LittleEndian.decode(Int32,@nt_headers.optional_headers.file_alignment.not_nil! ) - (io.pos % IO::ByteFormat::LittleEndian.decode(Int32,@nt_headers.optional_headers.file_alignment.not_nil! ))}"
-                # (IO::ByteFormat::LittleEndian.decode(Int32,@nt_headers.optional_headers.file_alignment.not_nil! ) - (io.pos % IO::ByteFormat::LittleEndian.decode(Int32,@nt_headers.optional_headers.file_alignment.not_nil! )) ).times do |i|
-                # ((@nt_headers.optional_headers.file_alignment ) - (io.pos % @nt_headers.optional_headers.file_alignment ) ).times do |i|
-                #     io.write Bytes[0]
-                # end 
-                calc_section_alignment_padding_size().times do 
-                    io.write Bytes[0]
-                end 
-                # end of aligning file 
-
-                @sections.each do |k,v| 
-                    # puts "Writing Secdion: #{k}"
-                    # puts "Section Raw: #{to_c_fmnt_hex(v)}"
-                    # gets 
-                    io.write v
-                end 
-
-                io.write @overlay.bytes 
-
-            # end 
-            # File.write(filename , io.to_slice) 
-            return io.to_slice 
         end 
 
 
@@ -481,7 +447,7 @@ module CrystalPE
                 end
                 Log.info {"Now parsing sections themselves"}
 
-
+                
 
                 # now we parse the sections themselves
                 endoflastsection_offset = 0 
@@ -528,9 +494,9 @@ module CrystalPE
                     # first parse the export dir for info and rvas
                     export_dir_offset = resolve_rva_offset(@nt_headers.optional_headers.data_directory.export_directory.not_nil!.virtual_address.not_nil!)
                     # puts "Export Offset: #{to_c_fmnt_hex(export_dir_offset)}"
-                    @img_exp_dir.characteristics              = rawfile[ (export_dir_offset + 0)..(export_dir_offset + 0 + 3 )]      
-                    @img_exp_dir.time_date_stamp              = rawfile[ (export_dir_offset + 4)..(export_dir_offset + 4  + 3 )]      
-                    @img_exp_dir.major_version                = rawfile[ (export_dir_offset + 8)..(export_dir_offset + 8 + 1 )]      
+                    @img_exp_dir.characteristics              = rawfile[ (export_dir_offset + 0) ..(export_dir_offset + 0  + 3 )]      
+                    @img_exp_dir.time_date_stamp              = rawfile[ (export_dir_offset + 4) ..(export_dir_offset + 4  + 3 )]      
+                    @img_exp_dir.major_version                = rawfile[ (export_dir_offset + 8) ..(export_dir_offset + 8  + 1 )]      
                     @img_exp_dir.minor_version                = rawfile[ (export_dir_offset + 10)..(export_dir_offset + 10 + 1 )]      
                     @img_exp_dir.name                         = rawfile[ (export_dir_offset + 12)..(export_dir_offset + 12 + 3 )]      
                     @img_exp_dir.base                         = rawfile[ (export_dir_offset + 16)..(export_dir_offset + 16 + 3 )]      
@@ -761,8 +727,54 @@ module CrystalPE
 
 
 
+                
+                
                 # Parse the Resource Directory here
+                rsrc_offset = resolve_rva_offset( @nt_headers.optional_headers.data_directory.resource_directory.virtual_address  )
+                if rsrc_offset > 0 
+                    
+                    # # we have a .rsrc section so we need to allocate a resrouces object 
+                    # puts @rawfile[rsrc_offset .. rsrc_offset + @sections[".rsrc"].size - 1 ].hexdump
+                    @resources = Image_Resource_Directory.from_rsrc_section_bytes(@rawfile[rsrc_offset .. rsrc_offset + @sections[".rsrc"].size - 1 ] ) # allocate our object to parse our .rsrc objects into 
+
+                    # # now init the resource directory 
+                    # @resources.not_nil!.resource_directory = Image_Resource_Directory.from_bytes(rawfile[rsrc_offset .. rsrc_offset + 15 ])
+
+                    # # the named entris starts imediately after the resource directory 
+                    # named_entry_offset = rsrc_offset + 16 # its directly after the resource_directory 
+
+                    # # populate the initial table
+                    # (@resources.not_nil!.resource_directory.number_of_named_entries + @resources.not_nil!.resource_directory.number_of_id_entries).times do |i| 
+                    #     # puts "named_entry[#{i}]: #{ to_c_fmnt_hex rawfile[named_entry_offset + (i*8) .. named_entry_offset + (8*i) + 3]}"
+                    #     # puts "> is named?: #{ (IO::ByteFormat::LittleEndian.decode(UInt32, rawfile[named_entry_offset + (8*i)  .. named_entry_offset + (8*i) + 3]) & 0x80000000 ) >> 31 }"
+                    #     entry = Image_Resource_Directory_Entry.new(rawfile[named_entry_offset + (i*8) .. named_entry_offset + (8*i) + 7])       
+                        
+
+
+                    #     @resources.not_nil!.entries << entry 
+                    # end
+
+
+
+                    
+    
+                end 
+                
+
+
                 # end of parsing Resource directory 
+
+
+
+
+
+
+
+
+
+
+
+
 
                 # Parse the Exception Directory here
                 # end of parsing Exception Directory 
@@ -830,6 +842,54 @@ module CrystalPE
             # puts "End of parsing!"
         end 
 
+
+
+        
+        # returns the pefile as a byte array. good for writing to a file 
+        def to_slice( ) : Bytes 
+            io = IO::Memory.new() 
+            # File.open(filename, "w") do |fi|
+                io.write @dos_header.raw_bytes()
+                io.write @dos_stub.raw_bytes()
+                io.write @rich_header.not_nil!.to_pe_slice() unless @rich_header.nil?
+                io.write @nt_headers.raw_bytes()
+
+                @section_table.each do |s| 
+                    io.write s.raw_bytes()
+                end 
+
+                # now we have to ensure the file is aligned properly
+                # this is done by adding padding between the section header and the first section 
+                # to ensure the first section starts at the beginning of a multiple of the file alignment.
+                # file alignment size can be found at the optional header value of "FileAlignment often at offset #BC"
+                # this file padding is done with all null bytes but technically it could be anything. 
+
+                # puts "Current Pos: #{io.pos}"       
+                # puts "Offset Hex:  #{to_c_fmnt_hex(@nt_headers.optional_headers.file_alignment.not_nil!) }"         
+                # puts "Offset Dec:  #{IO::ByteFormat::LittleEndian.decode(Int32,@nt_headers.optional_headers.file_alignment.not_nil!) }"         
+                # puts "Difference:  #{IO::ByteFormat::LittleEndian.decode(Int32,@nt_headers.optional_headers.file_alignment.not_nil! ) - (io.pos % IO::ByteFormat::LittleEndian.decode(Int32,@nt_headers.optional_headers.file_alignment.not_nil! ))}"
+                # (IO::ByteFormat::LittleEndian.decode(Int32,@nt_headers.optional_headers.file_alignment.not_nil! ) - (io.pos % IO::ByteFormat::LittleEndian.decode(Int32,@nt_headers.optional_headers.file_alignment.not_nil! )) ).times do |i|
+                # ((@nt_headers.optional_headers.file_alignment ) - (io.pos % @nt_headers.optional_headers.file_alignment ) ).times do |i|
+                #     io.write Bytes[0]
+                # end 
+                calc_section_alignment_padding_size().times do 
+                    io.write Bytes[0]
+                end 
+                # end of aligning file 
+
+                @sections.each do |k,v| 
+                    # puts "Writing Secdion: #{k}"
+                    # puts "Section Raw: #{to_c_fmnt_hex(v)}"
+                    # gets 
+                    io.write v
+                end 
+
+                io.write @overlay.bytes 
+
+            # end 
+            # File.write(filename , io.to_slice) 
+            return io.to_slice 
+        end 
 
         # this function calculates the alignment from the end of the section headers and the start of the first section 
         private def calc_section_alignment_padding_size : UInt32 
@@ -946,11 +1006,12 @@ module CrystalPE
             puts "Original size: #{  @dos_stub.bytes.not_nil!.size }"
             puts "Original e_lfanew: #{ to_c_fmnt_hex( @dos_header.e_lfanew ) }"
             puts "Original SectionAlignPadding Size: #{calc_section_alignment_padding_size}"
+            puts "Section Size: #{ to_c_fmnt_hex @nt_headers.optional_headers.section_alignment } - if this is bigger i think we need to update the rvas across the file..... oof "
             # if bytes.size <= 64 
             #     # dos stub must be 64 bytes or greater if less pad bytes with 0's 
             #     @dos_stub.bytes = (String.new(bytes) + "\0"*(64 - bytes.size)).to_slice 
             # else 
-                puts "Bytes Size: #{bytes.size}"
+                puts "Bytes Size: #{to_c_fmnt_hex bytes.size}"
                 if bytes.size % 4 != 0 
                     puts "Bytes needs to be divisible by 4... adding paddding"
                     bytes = (String.new(bytes) + "\0"*(4 - (bytes.size % 4) )).to_slice # the dos stub has to be divisible by 4 so pad if not 
@@ -1332,6 +1393,7 @@ module CrystalPE
             return d.final
         end 
 
+        
 
     end 
 end

@@ -32,7 +32,7 @@ module CrystalPE
         # :ditto:
         def [](str : String )
             if str.size > 8 
-                raise "Section name size cannot be > 8. Underlying structure is UInt64"
+                raise "ACCESS ERRROR! Section names cannot be > 8 chars. Underlying structure is UInt64."
             end
 
             if str.size == 8 
