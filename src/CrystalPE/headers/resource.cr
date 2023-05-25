@@ -126,6 +126,7 @@ module CrystalPE
         
         # this is only used for exporting size and peformat but we need to store the padding to ensure we dont change the binary 
         property padding                   : Bytes = Bytes[] 
+        property rsrc_offset               : UInt32 = 0 
 
         # parses a ImageResourceDirectory from a set of bytes. this should be exactly 16 bytes and only represents the core strucure without children or padding 
         def self.from_bytes(bts : Bytes ) : Image_Resource_Directory
@@ -140,12 +141,34 @@ module CrystalPE
         end 
 
         # parses and returns an Image_Resource_Directory stru8cture the represents the rsrc section 
-        # offset is used for 
-        def self.from_rsrc_section_bytes( section_bytes : Bytes ) : Image_Resource_Directory
+        # offset is used for recursive and is not used for the parent call and is the byte offset from the start of the .rsrc directory
+        def self.from_rsrc_section_bytes( section_bytes : Bytes , offset : UInt32|Int32 = 0 ) : Image_Resource_Directory
             # we initialize our node as the root node 
-            root = Image_Resource_Directory.from_bytes(section_bytes[0..15])
+            root = Image_Resource_Directory.from_bytes(section_bytes[offset .. offset + 15])
+            # puts "Parsing #{ to_c_fmnt_hex  root.to_slice}"
+            entries_offset = offset + 16 # the start of our directory entries
 
-            entries_offset = 16 # the start of our directory entries
+            total_resources = root.number_of_named_entries + root.number_of_id_entries
+            total_resources.times do |i| 
+                # create our dir_entry object from the appropriate bytes for the parent node
+                entry = Image_Resource_Directory_Entry.new(section_bytes[entries_offset + (i*8) .. entries_offset + (8*i) + 7])   
+                # puts "Parsed dir entry: #{ to_c_fmnt_hex section_bytes[entries_offset + (i*8) .. entries_offset + (8*i) + 7]}"
+                # now have the entry recursivly parse its children 
+                entry.parse_children(section_bytes)
+
+                # finally add our item to our entries array 
+                root.children << entry 
+            end 
+
+
+            return root 
+        end 
+
+        def from_rsrc_section_bytes( section_bytes : Bytes , offset : Int32 = 0 ) : Image_Resource_Directory
+            # we initialize our node as the root node 
+            root = Image_Resource_Directory.from_bytes(section_bytes[offset .. offset + 15])
+
+            entries_offset = offset + 16 # the start of our directory entries
 
             total_resources = root.number_of_named_entries + root.number_of_id_entries
             total_resources.times do |i| 
@@ -190,10 +213,13 @@ module CrystalPE
             names_queue   = IO::Memory.new # Image_Resource_Directory_String # name strucure
             entry_queue   = IO::Memory.new # Image_Resource_Data_Entry # pointers to our data 
             data_queue    = IO::Memory.new # bytes of actual data 
-
+            
 
             # write our own strucutre first before going into child strucures
-            dir_ent_queue.write to_slice() 
+
+
+
+
 
             # we will use a double ended queue for keeping track of where we are and  to order the entries appropriately 
             q = Deque(
@@ -202,57 +228,76 @@ module CrystalPE
                         Image_Resource_Data_Entry | # pointer/descriptor to the data 
                         Image_Resource_Directory_String # for our names that are referenced
                         ).new
-            
-            # push all our children to the queue
-            @children.each do |e|
-                q.push e
-            end 
 
+            # puts "Adding the root to our strucure"
+            # add ourself to the queue to start there 
+            q.push self 
 
             # # # now itterate through the queue and add any children of the entry to the end of the queue while adding the appropriate data to its respective io 
             while q.size > 0
                 # pull the first entry off the queue  
                 c = q.shift 
-                # puts "Deque'd a: #{c.class}"
 
                 # add its data to the correct io
                 if c.class == Image_Resource_Directory # the directory structure 
+
+                    # puts "Adding a directory with with #{c.as(Image_Resource_Directory).children.size } children"
                     # write our object 
                     dir_ent_queue.write c.as(Image_Resource_Directory).to_slice() 
+                    
+
 
                     # add children to the back of the queue if any 
                     c.as(Image_Resource_Directory).children.each do |cc| 
+                        # puts "adding child of Image_Resource_Directory: #{cc.}"
+                        # add the address offset for each child here not in the entry spot
+                        # gets  
+                        # write the directory's children addresses 
+                        dir_ent_queue.write cc.to_slice
+                        # cc.children.each do |ch| 
+                        #     if ch.class == Image_Resource_Directory_String
+                        #         names_queue.write ch.as(Image_Resource_Directory_String).to_slice
+                        #     end 
+                        # end 
+
                         q << cc # these will be of type Image_Resource_Directory_Entry
                     end 
+                    # puts "Done adding dir children "
                 elsif c.class ==  Image_Resource_Directory_Entry # id/pointer to a name/data/directory thing 
                     # puts "Its a dir entry... writing to the io..."
-                    dir_ent_queue.write c.as(Image_Resource_Directory_Entry).to_slice 
-                        
+                    # puts "adding a directory entry"
+                    # dir_ent_queue.write c.as(Image_Resource_Directory_Entry).to_slice 
                     # now add children to the queue if any 
                     c.as(Image_Resource_Directory_Entry).children.each do |child| 
-                        q << child
+                        if child.class == Image_Resource_Directory_String
+                            names_queue.write child.as(Image_Resource_Directory_String).to_slice
+                        end 
+                        q << child unless child.class == Image_Resource_Directory_String
                     end 
+                    # puts "Done adding dir entries children"
                 elsif c.class == Image_Resource_Directory_String # its a name 
+                    # puts "Writing String: #{ to_c_fmnt_hex  c.as(Image_Resource_Directory_String).to_slice }"
                     names_queue.write c.as(Image_Resource_Directory_String).to_slice 
 
 
                 elsif c.class == Image_Resource_Data_Entry # pointer to actual data 
-
+                    # puts "Data Entry: #{to_c_fmnt_hex  c.as(Image_Resource_Data_Entry).to_slice }"
+                    entry_queue.write c.as(Image_Resource_Data_Entry).to_slice 
+                    # puts "i would be enquing #{c.as(Image_Resource_Data_Entry).data } bytes to the data section"
+                    data_queue.write c.as(Image_Resource_Data_Entry).data 
                 else 
                     # puts c.class ===  Image_Resource_Directory_Entry
 
                     # raise "you shouldnt be able to put a class that isnt in the list to get here"
-                end 
-
-
+                end
             end 
 
 
             # write the io structures to the main io and then we can return...... lol 
-            io.write dir_ent_queue .to_slice
-            io.write names_queue   .to_slice
-            io.write entry_queue   .to_slice
-            io.write data_queue    .to_slice
+            io.write ( dir_ent_queue .to_slice ) 
+            io.write ( entry_queue   .to_slice ) 
+            io.write ( names_queue   .to_slice ) 
+            # io.write ( data_queue    .to_slice ) 
 
             #dont forget to write the padding
             io.write padding 
@@ -260,6 +305,7 @@ module CrystalPE
             return io.to_slice 
 
         end 
+
 
 
 
@@ -284,6 +330,11 @@ module CrystalPE
         property children : Array(Image_Resource_Directory|Image_Resource_Data_Entry|Image_Resource_Directory_String) = [] of (Image_Resource_Directory|Image_Resource_Data_Entry|Image_Resource_Directory_String)
 
         
+        # feed in a 8 byte chunk as represent in the pefile 
+        def initialize(bts : Bytes )
+            @field1 = IO::ByteFormat::LittleEndian.decode(UInt32, bts[0 .. 3] )
+            @field2 = IO::ByteFormat::LittleEndian.decode(UInt32, bts[4 .. 7] )
+        end 
 
 
         # :nodoc: 
@@ -291,6 +342,7 @@ module CrystalPE
         def parse_children( bts : Bytes ) 
             if string_ref? # we just add the string ref to our children the string is the end of a branch and cant have its own children 
                 # our size of the string is the first word 
+                # puts "Its a string ref | Name Offset: #{name_offset}|0x#{to_c_fmnt_hex name_offset}"
                 size = IO::ByteFormat::LittleEndian.decode( UInt16,  bts[name_offset .. name_offset + 1 ])
                 string = bts[name_offset + 2  .. name_offset + 2 + (size*2) - 1 ]
                 s = Image_Resource_Directory_String.new( size, string )
@@ -300,19 +352,30 @@ module CrystalPE
             end 
 
             if is_directory?
-                puts "Here we would load a directory entry strucure "
-                # d = Image_Resource_Directory.from_bytes(bts[name_offset .. name_offset + 1 ])
+                # puts "Here we would load a directory entry strucure "
 
+                # parse our sub image res dir from our offsets 
+                # d = Image_Resource_Directory.from_bytes(bts[name_offset .. name_offset + 15 ])
+                # puts "Dir_Offset: #{ to_c_fmnt_hex directory_offset }"
+                # puts ".rsrc size:  #{ to_c_fmnt_hex bts.size}"
+                d = Image_Resource_Directory.from_rsrc_section_bytes( bts , directory_offset)
+                
+                # now populate its own children from the table but include the offset for the subdir 
+                # d.from_rsrc_section_bytes()
                 # # now i think we have to do addional parsing of d
                 # # 
                 # d.parse_
 
                 # # finally add it to our children 
-                # children << d 
+                children << d 
 
             elsif is_data? 
-
-                d = Image_Resource_Data_Entry.from_bytes()
+                # puts "Here we would parse it as a data object"
+                # puts "Offset to data: #{ to_c_fmnt_hex  offset_to_data}"
+                d = Image_Resource_Data_Entry.from_bytes( bts[offset_to_data  .. offset_to_data + 15 ] )
+                # pp d.to_slice
+                d.data =  bts[ offset_to_data .. offset_to_data + d.size - 1  ]
+                children << d 
                 
             else
                 raise "you really broke something here didnt you"
@@ -336,11 +399,6 @@ module CrystalPE
         # property offset_to_data : UInt32 = 0 
         # property directory_offset : UInt32 = 0 
 
-        # feed in a 8 byte chunk as represent in the pefile 
-        def initialize(bts : Bytes )
-            @field1 = IO::ByteFormat::LittleEndian.decode(UInt32, bts[0 .. 3] )
-            @field2 = IO::ByteFormat::LittleEndian.decode(UInt32, bts[4 .. 7] )
-        end 
 
         # returns this as a slice 
         def to_slice() : Bytes 
@@ -371,14 +429,14 @@ module CrystalPE
         end 
 
         
-        def directory_offset : Uint32 
+        def directory_offset : UInt32 
             return @field2 & 0x7FFFFFFF
         end 
 
 
 
         # wraper for the field2 value 
-        def offset_to_data : Uint32 
+        def offset_to_data : UInt32 
             return @field2 
         end 
 
@@ -412,7 +470,7 @@ module CrystalPE
         def initialize(@size : UInt16, bytes : Bytes)
             # now we have to convert from utf16-le 
             # yes this is absolutely aweful..... and should be fixed....but it works... 
-            name = String.from_utf16(
+            @name = String.from_utf16(
                 bytes.unsafe_as(Slice(UInt16))
                 ).split("")[0 .. (bytes.size / 2).to_i - 1 ].join
         end 
@@ -423,7 +481,7 @@ module CrystalPE
             IO::ByteFormat::LittleEndian.encode(@size , io )
             
             # now encode the string to utf16.... kinda surprised crystal doesnt have a thing for this in the string class
-            @string.to_utf16.each do |s| 
+            @name.to_utf16.each do |s| 
                 IO::ByteFormat::LittleEndian.encode(s, io )
             end 
             
@@ -440,15 +498,33 @@ module CrystalPE
         property codepage : UInt32 = 0 
         property reserved : UInt32 = 0 
 
+        # this is loaded by default when the .rsrc strucure is parsed
+        property data      : Bytes = Bytes[] # set empty set of bytes by default. this noramlly is a pointer but its easy to parse and add this to this section for ease of use 
 
+
+        # this returns the image_resource_data_entry item 16 byte styrucure WITHOUT the data since that technically goes elsewhere 
         def to_slice() : Bytes 
             io = IO::Memory.new 
-            IO::ByteFormat::LittleEndian.encode data_rva , io 
-            IO::ByteFormat::LittleEndian.encode size , io 
-            IO::ByteFormat::LittleEndian.encode codepage , io 
-            IO::ByteFormat::LittleEndian.encode reserved , io 
+            IO::ByteFormat::LittleEndian.encode(@data_rva , io  ) 
+            IO::ByteFormat::LittleEndian.encode(@size     , io  ) 
+            IO::ByteFormat::LittleEndian.encode(@codepage , io  ) 
+            IO::ByteFormat::LittleEndian.encode(@reserved , io  ) 
             return io.to_slice 
         end 
+
+        # feed in a 16 byte section and it will be parsed 
+        def self.from_bytes(bts : Bytes ) : Image_Resource_Data_Entry
+            ret = Image_Resource_Data_Entry.new
+            ret.data_rva = IO::ByteFormat::LittleEndian.decode(UInt32, bts[0 .. 3 ])
+            ret.size     = IO::ByteFormat::LittleEndian.decode(UInt32, bts[4 .. 7 ])
+            ret.codepage = IO::ByteFormat::LittleEndian.decode(UInt32, bts[8 .. 11 ])
+            ret.reserved = IO::ByteFormat::LittleEndian.decode(UInt32, bts[12 .. 15 ])
+
+            return ret 
+        end
+
+
+
     end 
 
 

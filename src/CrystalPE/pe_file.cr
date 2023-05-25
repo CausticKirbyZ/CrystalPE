@@ -1308,6 +1308,22 @@ module CrystalPE
             return @nt_headers.optional_headers.magic == 0x010B # Bytes[0x0B,0x01]
         end
 
+        # returns true if the file has debug section or the data directory's dubug_directory virtual address > 0 
+        def debug? : Bool 
+            begin 
+                if @sections[".debug"].size > 0 
+                    return true 
+                end 
+            rescue 
+            end 
+            if @nt_headers.optional_headers.data_directory.debug_directory.virtual_address > 0 
+                return true             
+            end 
+            
+            return false 
+        end 
+
+
         # returns a numeric shannon entropy value
         def shannon_entropy : Float64 
             data = to_slice()
