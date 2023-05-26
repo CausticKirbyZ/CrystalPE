@@ -1351,6 +1351,19 @@ module CrystalPE
             -entropy
         end
 
+        # returns a numeric shannon entropy value of the given bytes
+        def self.shannon_entropy(data : Bytes ) : Float64 
+            frequency = Hash(UInt8, Int32).new(0)
+            data.each { |byte| frequency[byte] += 1 }
+            data_size = data.size.to_f
+            entropy = 0.0
+            frequency.each do |byte, count|
+                probability = count / data_size
+                entropy += probability * Math.log(probability, 2)
+            end
+            -entropy
+        end
+
 
 
         # outputs the md5sum of the file 
