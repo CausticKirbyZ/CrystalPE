@@ -145,14 +145,14 @@ module CrystalPE
         def self.from_rsrc_section_bytes( section_bytes : Bytes , offset : UInt32|Int32 = 0 ) : Image_Resource_Directory
             # we initialize our node as the root node 
             root = Image_Resource_Directory.from_bytes(section_bytes[offset .. offset + 15])
-            # puts "Parsing #{ to_c_fmnt_hex  root.to_slice}"
+            # puts "Parsing #{ CrystalPE.to_c_fmnt_hex  root.to_slice}"
             entries_offset = offset + 16 # the start of our directory entries
 
             total_resources = root.number_of_named_entries + root.number_of_id_entries
             total_resources.times do |i| 
                 # create our dir_entry object from the appropriate bytes for the parent node
                 entry = Image_Resource_Directory_Entry.new(section_bytes[entries_offset + (i*8) .. entries_offset + (8*i) + 7])   
-                # puts "Parsed dir entry: #{ to_c_fmnt_hex section_bytes[entries_offset + (i*8) .. entries_offset + (8*i) + 7]}"
+                # puts "Parsed dir entry: #{ CrystalPE.to_c_fmnt_hex section_bytes[entries_offset + (i*8) .. entries_offset + (8*i) + 7]}"
                 # now have the entry recursivly parse its children 
                 entry.parse_children(section_bytes)
 
@@ -276,12 +276,12 @@ module CrystalPE
                     end 
                     # puts "Done adding dir entries children"
                 elsif c.class == Image_Resource_Directory_String # its a name 
-                    # puts "Writing String: #{ to_c_fmnt_hex  c.as(Image_Resource_Directory_String).to_slice }"
+                    # puts "Writing String: #{ CrystalPE.to_c_fmnt_hex  c.as(Image_Resource_Directory_String).to_slice }"
                     names_queue.write c.as(Image_Resource_Directory_String).to_slice 
 
 
                 elsif c.class == Image_Resource_Data_Entry # pointer to actual data 
-                    # puts "Data Entry: #{to_c_fmnt_hex  c.as(Image_Resource_Data_Entry).to_slice }"
+                    # puts "Data Entry: #{CrystalPE.to_c_fmnt_hex  c.as(Image_Resource_Data_Entry).to_slice }"
                     entry_queue.write c.as(Image_Resource_Data_Entry).to_slice 
                     # puts "i would be enquing #{c.as(Image_Resource_Data_Entry).data } bytes to the data section"
                     data_queue.write c.as(Image_Resource_Data_Entry).data 
@@ -342,7 +342,7 @@ module CrystalPE
         def parse_children( bts : Bytes ) 
             if string_ref? # we just add the string ref to our children the string is the end of a branch and cant have its own children 
                 # our size of the string is the first word 
-                # puts "Its a string ref | Name Offset: #{name_offset}|0x#{to_c_fmnt_hex name_offset}"
+                # puts "Its a string ref | Name Offset: #{name_offset}|0x#{CrystalPE.to_c_fmnt_hex name_offset}"
                 size = IO::ByteFormat::LittleEndian.decode( UInt16,  bts[name_offset .. name_offset + 1 ])
                 string = bts[name_offset + 2  .. name_offset + 2 + (size*2) - 1 ]
                 s = Image_Resource_Directory_String.new( size, string )
@@ -356,8 +356,8 @@ module CrystalPE
 
                 # parse our sub image res dir from our offsets 
                 # d = Image_Resource_Directory.from_bytes(bts[name_offset .. name_offset + 15 ])
-                # puts "Dir_Offset: #{ to_c_fmnt_hex directory_offset }"
-                # puts ".rsrc size:  #{ to_c_fmnt_hex bts.size}"
+                # puts "Dir_Offset: #{ CrystalPE.to_c_fmnt_hex directory_offset }"
+                # puts ".rsrc size:  #{ CrystalPE.to_c_fmnt_hex bts.size}"
                 d = Image_Resource_Directory.from_rsrc_section_bytes( bts , directory_offset)
                 
                 # now populate its own children from the table but include the offset for the subdir 
@@ -371,7 +371,7 @@ module CrystalPE
 
             elsif is_data? 
                 # puts "Here we would parse it as a data object"
-                # puts "Offset to data: #{ to_c_fmnt_hex  offset_to_data}"
+                # puts "Offset to data: #{ CrystalPE.to_c_fmnt_hex  offset_to_data}"
                 d = Image_Resource_Data_Entry.from_bytes( bts[offset_to_data  .. offset_to_data + 15 ] )
                 # pp d.to_slice
                 d.data =  bts[ offset_to_data .. offset_to_data + d.size - 1  ]

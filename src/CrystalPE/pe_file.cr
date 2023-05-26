@@ -165,7 +165,7 @@ module CrystalPE
                 # e_lfanew is the offset of the new exe header (pe header start)
                 # e_lfanew = IO::ByteFormat::LittleEndian.decode(Int32, rawfile[60..63] )
                 e_lfanew = @dos_header.e_lfanew
-                Log.debug { "e_lfanew: #{e_lfanew} | 0x#{to_c_fmnt_hex e_lfanew}" }
+                Log.debug { "e_lfanew: #{e_lfanew} | 0x#{CrystalPE.to_c_fmnt_hex e_lfanew}" }
                 
                 # this is misleading and is actually the "Rich" offset but this gets updated later with the correct value. 
                 # needs to be up here to be referenced later
@@ -173,11 +173,11 @@ module CrystalPE
 
 
                 Log.info {"Now Parsing DOS Stub/Rich Header"}
-                # puts "DBG: e_lfanew : #{to_c_fmnt_hex( e_lfanew) }"
+                # puts "DBG: e_lfanew : #{CrystalPE.to_c_fmnt_hex( e_lfanew) }"
                 if e_lfanew > 64 
                     # dos stubs and rich headers technically dont need to exist. so only parse them if there is an offset over 64 bytes 
                     # parse the rich header 
-                    # puts "DBG: #{ to_c_fmnt_hex rawfile[64..( e_lfanew - 1 )] }"
+                    # puts "DBG: #{ CrystalPE.to_c_fmnt_hex rawfile[64..( e_lfanew - 1 )] }"
 
                     # if "Rich" is in the header value 
                     # if rawfile[64..( e_lfanew - 1 )].includes? Bytes[ 0x52, 0x69, 0x63, 0x68 ]
@@ -228,9 +228,9 @@ module CrystalPE
                         
                     #     puts "Parsed Rich header"
                     #     # puts "DBG: Rich:   #{String.new rich}"
-                    #     # puts "DBG: Key:    #{to_c_fmnt_hex(xor_key ) }"
-                    #     # puts "DBG: ending: #{to_c_fmnt_hex(ending ) }"
-                    #     # puts "RichRaw: #{ to_c_fmnt_hex(@rich_header.bytes ) }"
+                    #     # puts "DBG: Key:    #{CrystalPE.to_c_fmnt_hex(xor_key ) }"
+                    #     # puts "DBG: ending: #{CrystalPE.to_c_fmnt_hex(ending ) }"
+                    #     # puts "RichRaw: #{ CrystalPE.to_c_fmnt_hex(@rich_header.bytes ) }"
                         
                     # end 
                     # puts "Has Dos Stub or Rich Header!"
@@ -268,7 +268,7 @@ module CrystalPE
                         @dos_stub.bytes = rawfile[64..(e_lfanew - 1 - @rich_header.not_nil!.size)]
                     end 
                 end 
-                # puts "DosStub: #{to_c_fmnt_hex @dos_stub.bytes}"
+                # puts "DosStub: #{CrystalPE.to_c_fmnt_hex @dos_stub.bytes}"
                 # end of parsing dos stub 
                 Log.info {"Dos Stub and Rich Header Parsed"}
 
@@ -338,7 +338,7 @@ module CrystalPE
                     @nt_headers.optional_headers.loader_flags                       = IO::ByteFormat::LittleEndian.decode( UInt32 , rawfile[(fh_offset + 88)..(fh_offset + 91)] ) 
                     @nt_headers.optional_headers.number_of_rva_and_sizes            = IO::ByteFormat::LittleEndian.decode( UInt32 , rawfile[(fh_offset + 92)..(fh_offset + 95)] ) 
                     dd_offset = fh_offset + 96
-                    # puts "dd_offset = #{to_c_fmnt_hex(dd_offset)}"
+                    # puts "dd_offset = #{CrystalPE.to_c_fmnt_hex(dd_offset)}"
 
                 elsif  @nt_headers.optional_headers.magic == 0x020b # == Bytes[0x0B,0x02] # this is for x64 bit binaries 
                     @nt_headers.optional_headers.major_linker_version               = IO::ByteFormat::LittleEndian.decode( UInt8  , rawfile[(fh_offset + 2 .. fh_offset + 2)] ) 
@@ -456,8 +456,8 @@ module CrystalPE
 
                     offset = header.pointer_to_raw_data
                     size   = header.size_of_raw_data
-                    Log.trace {"Pointer_to_raw_data: #{to_c_fmnt_hex offset }"}
-                    Log.trace {"SizeOfRawdata(hex):  #{to_c_fmnt_hex size }"}
+                    Log.trace {"Pointer_to_raw_data: #{CrystalPE.to_c_fmnt_hex offset }"}
+                    Log.trace {"SizeOfRawdata(hex):  #{CrystalPE.to_c_fmnt_hex size }"}
                     Log.trace {"SizeOfRawdata:       #{ size }"}
                     # puts "DBG: Size-1: #{size - 1 }"
                     if size <= 0 
@@ -469,7 +469,7 @@ module CrystalPE
                     end 
                     Log.trace {"Setting sections[#{header.name_as_string}] = #{ section.empty? ? "Bytes[]" : section[0..4]}..." }
 
-                    # sections[to_c_fmnt_hex( header.name )] = section 
+                    # sections[CrystalPE.to_c_fmnt_hex( header.name )] = section 
                     # sections[String.new(header.name.not_nil!)] = section
                     sections[ header.name ] = section 
                 end 
@@ -493,7 +493,7 @@ module CrystalPE
 
                     # first parse the export dir for info and rvas
                     export_dir_offset = resolve_rva_offset(@nt_headers.optional_headers.data_directory.export_directory.not_nil!.virtual_address.not_nil!)
-                    # puts "Export Offset: #{to_c_fmnt_hex(export_dir_offset)}"
+                    # puts "Export Offset: #{CrystalPE.to_c_fmnt_hex(export_dir_offset)}"
                     @img_exp_dir.characteristics              = rawfile[ (export_dir_offset + 0) ..(export_dir_offset + 0  + 3 )]      
                     @img_exp_dir.time_date_stamp              = rawfile[ (export_dir_offset + 4) ..(export_dir_offset + 4  + 3 )]      
                     @img_exp_dir.major_version                = rawfile[ (export_dir_offset + 8) ..(export_dir_offset + 8  + 1 )]      
@@ -513,11 +513,11 @@ module CrystalPE
 
                     # these are the base offsets for each of the functions/names/ordinals but those are just arrays of rvas that need to be resolved to get the actual data
                     export_functions_offset = resolve_rva_offset(@img_exp_dir.address_of_functions.not_nil!) 
-                    # puts "ExportFuncsOffset: #{to_c_fmnt_hex(export_functions_offset)}"
+                    # puts "ExportFuncsOffset: #{CrystalPE.to_c_fmnt_hex(export_functions_offset)}"
                     export_name_offset      = resolve_rva_offset(@img_exp_dir.address_of_names.not_nil!)
-                    # puts "ExportNameOffset: #{to_c_fmnt_hex(export_name_offset)}"
+                    # puts "ExportNameOffset: #{CrystalPE.to_c_fmnt_hex(export_name_offset)}"
                     export_addr_name_ord_offset = resolve_rva_offset(@img_exp_dir.address_of_name_ordinals.not_nil!) 
-                    # puts "ExportOrdOffset: #{to_c_fmnt_hex(export_addr_name_ord_offset)}"
+                    # puts "ExportOrdOffset: #{CrystalPE.to_c_fmnt_hex(export_addr_name_ord_offset)}"
                     # puts "" 
 
                     # we loop through the export name table and populate the @exports list of function exported by our dll
@@ -588,7 +588,7 @@ module CrystalPE
                 # import addresses are parsed from the ImageImportDescriptors
                 img_imp_desc_offset = resolve_rva_offset(@nt_headers.optional_headers.data_directory.import_directory.not_nil!.virtual_address.not_nil!)
 
-                # puts "IAT Offset: #{to_c_fmnt_hex(iat_offset)}"
+                # puts "IAT Offset: #{CrystalPE.to_c_fmnt_hex(iat_offset)}"
                 # image import descriptors are 20 bytes in size 
                 # we parse the iat by looping untill we find a completely null import descriptor
                 Log.info {"Now parsing Import Directory Table"}
@@ -623,12 +623,12 @@ module CrystalPE
                     name_offset = resolve_rva_offset(ii.image_import_descriptor.name.not_nil!)
 
                     # puts "DLL Name:    #{String.new(rawfile[name_offset..name_offset + 100 ]).split("\x00").first}"
-                    # puts "name_offset: #{to_c_fmnt_hex( name_offset )}"
+                    # puts "name_offset: #{CrystalPE.to_c_fmnt_hex( name_offset )}"
                     ii.dll_name = String.new(rawfile[name_offset..name_offset + 100 ]).split("\x00").first.to_s
                     # puts "parsing: #{ii.dll_name}"
                     # get the import lookup table address/offset 
                     ilt_offset = resolve_rva_offset(ii.image_import_descriptor.originalfirstthunk.not_nil!)
-                    # puts "ILT offset: #{to_c_fmnt_hex IO::ByteFormat::LittleEndian.decode(Int32,ii.image_import_descriptor.originalfirstthunk.not_nil!) }"
+                    # puts "ILT offset: #{CrystalPE.to_c_fmnt_hex IO::ByteFormat::LittleEndian.decode(Int32,ii.image_import_descriptor.originalfirstthunk.not_nil!) }"
 
 
                     # now we loop through the import lookup table to find the addresses of all the imported function names and data
@@ -646,7 +646,7 @@ module CrystalPE
                             end
                             # i += 1 
 
-                            # puts " First Bytes of #{to_c_fmnt_hex(bts)}"
+                            # puts " First Bytes of #{CrystalPE.to_c_fmnt_hex(bts)}"
                             # if the last item is 0 then its using a hint/table so we need to look up the adress of the first 2 bytes
                             if bts.last == 0
                                 iibn_offset = resolve_rva_offset(bts) 
@@ -674,12 +674,12 @@ module CrystalPE
                             if bts == Bytes[0,0,0,0,0,0,0,0] 
                                 break 
                             else 
-                                # puts "DBG:[ImpFuncTab]: #{to_c_fmnt_hex(bts)} "
+                                # puts "DBG:[ImpFuncTab]: #{CrystalPE.to_c_fmnt_hex(bts)} "
                                 # gets 
                             end
                             # i += 1 
 
-                            # puts " First Bytes of #{to_c_fmnt_hex(bts)}"
+                            # puts " First Bytes of #{CrystalPE.to_c_fmnt_hex(bts)}"
                             # if the last item is 0 then its using a hint/table so we need to look up the adress of the first 2 bytes
                             if bts.last == 0
                                 # puts "bts.last is 0"
@@ -745,7 +745,7 @@ module CrystalPE
 
                     # # populate the initial table
                     # (@resources.not_nil!.resource_directory.number_of_named_entries + @resources.not_nil!.resource_directory.number_of_id_entries).times do |i| 
-                    #     # puts "named_entry[#{i}]: #{ to_c_fmnt_hex rawfile[named_entry_offset + (i*8) .. named_entry_offset + (8*i) + 3]}"
+                    #     # puts "named_entry[#{i}]: #{ CrystalPE.to_c_fmnt_hex rawfile[named_entry_offset + (i*8) .. named_entry_offset + (8*i) + 3]}"
                     #     # puts "> is named?: #{ (IO::ByteFormat::LittleEndian.decode(UInt32, rawfile[named_entry_offset + (8*i)  .. named_entry_offset + (8*i) + 3]) & 0x80000000 ) >> 31 }"
                     #     entry = Image_Resource_Directory_Entry.new(rawfile[named_entry_offset + (i*8) .. named_entry_offset + (8*i) + 7])       
                         
@@ -865,7 +865,7 @@ module CrystalPE
                 # this file padding is done with all null bytes but technically it could be anything. 
 
                 # puts "Current Pos: #{io.pos}"       
-                # puts "Offset Hex:  #{to_c_fmnt_hex(@nt_headers.optional_headers.file_alignment.not_nil!) }"         
+                # puts "Offset Hex:  #{CrystalPE.to_c_fmnt_hex(@nt_headers.optional_headers.file_alignment.not_nil!) }"         
                 # puts "Offset Dec:  #{IO::ByteFormat::LittleEndian.decode(Int32,@nt_headers.optional_headers.file_alignment.not_nil!) }"         
                 # puts "Difference:  #{IO::ByteFormat::LittleEndian.decode(Int32,@nt_headers.optional_headers.file_alignment.not_nil! ) - (io.pos % IO::ByteFormat::LittleEndian.decode(Int32,@nt_headers.optional_headers.file_alignment.not_nil! ))}"
                 # (IO::ByteFormat::LittleEndian.decode(Int32,@nt_headers.optional_headers.file_alignment.not_nil! ) - (io.pos % IO::ByteFormat::LittleEndian.decode(Int32,@nt_headers.optional_headers.file_alignment.not_nil! )) ).times do |i|
@@ -879,7 +879,7 @@ module CrystalPE
 
                 @sections.each do |k,v| 
                     # puts "Writing Secdion: #{k}"
-                    # puts "Section Raw: #{to_c_fmnt_hex(v)}"
+                    # puts "Section Raw: #{CrystalPE.to_c_fmnt_hex(v)}"
                     # gets 
                     io.write v
                 end 
@@ -920,16 +920,16 @@ module CrystalPE
                 # if our iat rva is in this section return its index 
                 # sec_va      = IO::ByteFormat::LittleEndian.decode(Int32, sec.virtual_address.not_nil!)
                 sec_va      = sec.virtual_address
-                # puts "Sec_va:#{to_c_fmnt_hex( sec_va      ) }"
+                # puts "Sec_va:#{CrystalPE.to_c_fmnt_hex( sec_va      ) }"
                 # sec_misc_va = IO::ByteFormat::LittleEndian.decode(Int32,sec.misc.not_nil!)
                 sec_misc_va = sec.misc
-                # puts "Sec_misc:#{to_c_fmnt_hex( sec_misc_va ) }"
+                # puts "Sec_misc:#{CrystalPE.to_c_fmnt_hex( sec_misc_va ) }"
                 # sec_ptr_raw = IO::ByteFormat::LittleEndian.decode(Int32,sec.pointer_to_raw_data.not_nil!)
                 sec_ptr_raw = sec.pointer_to_raw_data
-                # puts "Sec_ptr:#{to_c_fmnt_hex( sec_ptr_raw ) }"
+                # puts "Sec_ptr:#{CrystalPE.to_c_fmnt_hex( sec_ptr_raw ) }"
 
-                # puts "iat_rva(#{to_c_fmnt_hex(iat_rva)}) >= sec_va(#{to_c_fmnt_hex( sec_va      )})" if (iat_rva >= sec_va )
-                # puts "iat_rva(#{to_c_fmnt_hex(iat_rva)}) < sec_misc_va(#{to_c_fmnt_hex( sec_misc_va      )}) + sec_va(#{to_c_fmnt_hex( sec_va      )})" if (iat_rva < sec_misc_va + sec_va)
+                # puts "iat_rva(#{CrystalPE.to_c_fmnt_hex(iat_rva)}) >= sec_va(#{CrystalPE.to_c_fmnt_hex( sec_va      )})" if (iat_rva >= sec_va )
+                # puts "iat_rva(#{CrystalPE.to_c_fmnt_hex(iat_rva)}) < sec_misc_va(#{CrystalPE.to_c_fmnt_hex( sec_misc_va      )}) + sec_va(#{CrystalPE.to_c_fmnt_hex( sec_va      )})" if (iat_rva < sec_misc_va + sec_va)
 
 
                 if(init_rva >= sec_va ) && (init_rva < sec_misc_va +  sec_va )
@@ -948,16 +948,16 @@ module CrystalPE
                 # if our iat rva is in this section return its index 
                 # sec_va      = IO::ByteFormat::LittleEndian.decode(Int32, sec.virtual_address.not_nil!)
                 sec_va      = sec.virtual_address
-                # puts "Sec_va:#{to_c_fmnt_hex( sec_va      ) }"
+                # puts "Sec_va:#{CrystalPE.to_c_fmnt_hex( sec_va      ) }"
                 # sec_misc_va = IO::ByteFormat::LittleEndian.decode(Int32, sec.misc.not_nil!)
                 sec_misc_va = sec.misc
-                # puts "Sec_misc:#{to_c_fmnt_hex( sec_misc_va ) }"
+                # puts "Sec_misc:#{CrystalPE.to_c_fmnt_hex( sec_misc_va ) }"
                 # sec_ptr_raw = IO::ByteFormat::LittleEndian.decode(Int32, sec.pointer_to_raw_data.not_nil!)
                 sec_ptr_raw = sec.pointer_to_raw_data
-                # puts "Sec_ptr:#{to_c_fmnt_hex( sec_ptr_raw ) }"
+                # puts "Sec_ptr:#{CrystalPE.to_c_fmnt_hex( sec_ptr_raw ) }"
 
-                # puts "iat_rva(#{to_c_fmnt_hex(iat_rva)}) >= sec_va(#{to_c_fmnt_hex( sec_va      )})" if (iat_rva >= sec_va )
-                # puts "iat_rva(#{to_c_fmnt_hex(iat_rva)}) < sec_misc_va(#{to_c_fmnt_hex( sec_misc_va      )}) + sec_va(#{to_c_fmnt_hex( sec_va      )})" if (iat_rva < sec_misc_va + sec_va)
+                # puts "iat_rva(#{CrystalPE.to_c_fmnt_hex(iat_rva)}) >= sec_va(#{CrystalPE.to_c_fmnt_hex( sec_va      )})" if (iat_rva >= sec_va )
+                # puts "iat_rva(#{CrystalPE.to_c_fmnt_hex(iat_rva)}) < sec_misc_va(#{CrystalPE.to_c_fmnt_hex( sec_misc_va      )}) + sec_va(#{CrystalPE.to_c_fmnt_hex( sec_va      )})" if (iat_rva < sec_misc_va + sec_va)
 
 
                 if(rva >= sec_va ) && (rva < sec_misc_va +  sec_va )
@@ -977,14 +977,14 @@ module CrystalPE
             section_table.each_with_index do |sec, i | 
                 # if our iat rva is in this section return its index 
                 sec_va      = IO::ByteFormat::LittleEndian.decode(Int32, sec.virtual_address.not_nil!)
-                # puts "Sec_va:#{to_c_fmnt_hex( sec_va      ) }"
+                # puts "Sec_va:#{CrystalPE.to_c_fmnt_hex( sec_va      ) }"
                 sec_misc_va = IO::ByteFormat::LittleEndian.decode(Int32, sec.misc.not_nil!)
-                # puts "Sec_misc:#{to_c_fmnt_hex( sec_misc_va ) }"
+                # puts "Sec_misc:#{CrystalPE.to_c_fmnt_hex( sec_misc_va ) }"
                 sec_ptr_raw = IO::ByteFormat::LittleEndian.decode(Int32, sec.pointer_to_raw_data.not_nil!)
-                # puts "Sec_ptr:#{to_c_fmnt_hex( sec_ptr_raw ) }"
+                # puts "Sec_ptr:#{CrystalPE.to_c_fmnt_hex( sec_ptr_raw ) }"
 
-                # puts "iat_rva(#{to_c_fmnt_hex(iat_rva)}) >= sec_va(#{to_c_fmnt_hex( sec_va      )})" if (iat_rva >= sec_va )
-                # puts "iat_rva(#{to_c_fmnt_hex(iat_rva)}) < sec_misc_va(#{to_c_fmnt_hex( sec_misc_va      )}) + sec_va(#{to_c_fmnt_hex( sec_va      )})" if (iat_rva < sec_misc_va + sec_va)
+                # puts "iat_rva(#{CrystalPE.to_c_fmnt_hex(iat_rva)}) >= sec_va(#{CrystalPE.to_c_fmnt_hex( sec_va      )})" if (iat_rva >= sec_va )
+                # puts "iat_rva(#{CrystalPE.to_c_fmnt_hex(iat_rva)}) < sec_misc_va(#{CrystalPE.to_c_fmnt_hex( sec_misc_va      )}) + sec_va(#{CrystalPE.to_c_fmnt_hex( sec_va      )})" if (iat_rva < sec_misc_va + sec_va)
 
 
                 if(rva >= sec_va ) && (rva < sec_misc_va +  sec_va )
@@ -1004,14 +1004,14 @@ module CrystalPE
             # we need to know the original size so we can adjust the pe offset of e_lfanew
 
             puts "Original size: #{  @dos_stub.bytes.not_nil!.size }"
-            puts "Original e_lfanew: #{ to_c_fmnt_hex( @dos_header.e_lfanew ) }"
+            puts "Original e_lfanew: #{ CrystalPE.to_c_fmnt_hex( @dos_header.e_lfanew ) }"
             puts "Original SectionAlignPadding Size: #{calc_section_alignment_padding_size}"
-            puts "Section Size: #{ to_c_fmnt_hex @nt_headers.optional_headers.section_alignment } - if this is bigger i think we need to update the rvas across the file..... oof "
+            puts "Section Size: #{ CrystalPE.to_c_fmnt_hex @nt_headers.optional_headers.section_alignment } - if this is bigger i think we need to update the rvas across the file..... oof "
             # if bytes.size <= 64 
             #     # dos stub must be 64 bytes or greater if less pad bytes with 0's 
             #     @dos_stub.bytes = (String.new(bytes) + "\0"*(64 - bytes.size)).to_slice 
             # else 
-                puts "Bytes Size: #{to_c_fmnt_hex bytes.size}"
+                puts "Bytes Size: #{CrystalPE.to_c_fmnt_hex bytes.size}"
                 if bytes.size % 4 != 0 
                     puts "Bytes needs to be divisible by 4... adding paddding"
                     bytes = (String.new(bytes) + "\0"*(4 - (bytes.size % 4) )).to_slice # the dos stub has to be divisible by 4 so pad if not 
@@ -1025,7 +1025,7 @@ module CrystalPE
                 # io.write_bytes(new_offset)
                 # @dos_header.e_lfanew = io.to_slice 
                 @dos_header.e_lfanew = new_offset 
-                puts "New e_lfanew: #{to_c_fmnt_hex @dos_header.e_lfanew}"
+                puts "New e_lfanew: #{CrystalPE.to_c_fmnt_hex @dos_header.e_lfanew}"
                 
                 puts "New SectionAlignPadding Size: #{calc_section_alignment_padding_size}"
 
@@ -1043,7 +1043,7 @@ module CrystalPE
             # cur_offset = IO::ByteFormat::LittleEndian.decode(Int32,@dos_header.e_lfanew.not_nil!)
             cur_offset = @dos_header.e_lfanew
 
-            # puts "Cur_Offset:#{ to_c_fmnt_hex cur_offset}"
+            # puts "Cur_Offset:#{ CrystalPE.to_c_fmnt_hex cur_offset}"
             # our new offset is our current e_lfanew (which includes the current rich header size if there is one) and the difference between the new header and our current one
             if @rich_header
                 new_offset = cur_offset + newheader.size() - @rich_header.not_nil!.size()
@@ -1051,7 +1051,7 @@ module CrystalPE
                 puts "Setting new rich header"
                 new_offset = cur_offset + newheader.size() # this means we are inserting one not updating it 
             end 
-            # puts "New_Offset:#{ to_c_fmnt_hex new_offset}"
+            # puts "New_Offset:#{ CrystalPE.to_c_fmnt_hex new_offset}"
 
             
 
@@ -1066,7 +1066,7 @@ module CrystalPE
             #     # now update the optional headers with the adjusted offset 
 
             #     puts "Original rva of .new header: #{@nt_headers.optional_headers.data_directory.com_descriptor_directory.virtual_address}"
-            #     puts "New Header.size: #{newheader.size} | 0x#{ to_c_fmnt_hex newheader.size} "
+            #     puts "New Header.size: #{newheader.size} | 0x#{ CrystalPE.to_c_fmnt_hex newheader.size} "
             #     if !@rich_header 
             #         puts "setting offset dir to the size of newheader"
             #         offset_dif = newheader.size()
@@ -1208,17 +1208,17 @@ module CrystalPE
             optional_offset = @dos_header.e_lfanew + 4 + 20 + 64    # the pe signature befor the file headers 
                                                                     #  + 20 # the file header size
                                                                     #  + 64 # the checksum offset in the 
-            # puts "Offset value: #{to_c_fmnt_hex optional_offset}"
+            # puts "Offset value: #{CrystalPE.to_c_fmnt_hex optional_offset}"
 
 
             (temp.size / 4 ).to_i.times do |i|
-                # print "DBG: [#{ to_c_fmnt_hex  temp[i*4..i*4+3]}]"
+                # print "DBG: [#{ CrystalPE.to_c_fmnt_hex  temp[i*4..i*4+3]}]"
                 # puts "DBG:[i:#{i}]:: #{checksum} "
                 # if i == ((@nt_headers.optional_headers.optional_offset + 64) / 4)# 64 is the checksum offset in the opt headers
                 if i == optional_offset / 4 
-                    puts "hit our previous checksum: #{to_c_fmnt_hex temp[i*4..i*4 + 3] }"
+                    puts "hit our previous checksum: #{CrystalPE.to_c_fmnt_hex temp[i*4..i*4 + 3] }"
                     # puts " < Original CheckSum"
-                    # puts "Skipping Original Checksum: #{to_c_fmnt_hex IO::ByteFormat::LittleEndian.decode(UInt32,temp[(i*4)..(i*4 + 3)])} : #{to_c_fmnt_hex(temp[(i*4)..(i*4 + 3)])}"
+                    # puts "Skipping Original Checksum: #{CrystalPE.to_c_fmnt_hex IO::ByteFormat::LittleEndian.decode(UInt32,temp[(i*4)..(i*4 + 3)])} : #{CrystalPE.to_c_fmnt_hex(temp[(i*4)..(i*4 + 3)])}"
                     next 
                 end
                 
@@ -1242,7 +1242,7 @@ module CrystalPE
             checksum = checksum + sze 
 
             checksum = checksum.to_u32
-            # puts "New Checksum in hex: 0x#{to_c_fmnt_hex checksum}"
+            # puts "New Checksum in hex: 0x#{CrystalPE.to_c_fmnt_hex checksum}"
             # puts "New Checksum in dec: #{ checksum}"
 
             # this is downright awful(but it works XD)... :( do better 
