@@ -1,4 +1,4 @@
-name: CrystalPE
+name: crystalpe
 version: 0.1.0
 
 authors:
@@ -7,3 +7,10 @@ authors:
 crystal: 1.4.1
 
 license: MIT
+
+dependencies:
+  cryprompt:
+    github: CausticKirbyZ/cryprompt
+    branch: master
+  tallboy:
+    github: epoch/tallboy
