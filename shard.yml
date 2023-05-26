@@ -4,13 +4,6 @@ version: 0.1.0
 authors:
   - CausticKirbyZ 
 
-crystal: 1.4.1
+crystal: 1.8.0
 
 license: MIT
-
-dependencies:
-  cryprompt:
-    github: CausticKirbyZ/cryprompt
-    branch: master
-  tallboy:
-    github: epoch/tallboy
