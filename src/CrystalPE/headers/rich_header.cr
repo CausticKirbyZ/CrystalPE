@@ -159,7 +159,7 @@ module CrystalPE
                         break 
                     end 
                     stub = xor_crypt( dos_stub[dans_index..dans_index + 3 ], ret.xor_key )
-                    Log.trace { "Rich Stub:  #{to_c_fmnt_hex dos_stub[dans_index..dans_index + 3 ] } -xor(#{to_c_fmnt_hex ret.xor_key})-> #{to_c_fmnt_hex stub } = String->#{ String.new(stub ) }" }
+                    Log.trace { "Rich Stub:  #{CrystalPE.to_c_fmnt_hex dos_stub[dans_index..dans_index + 3 ] } -xor(#{CrystalPE.to_c_fmnt_hex ret.xor_key})-> #{CrystalPE.to_c_fmnt_hex stub } = String->#{ String.new(stub ) }" }
                     if String.new( stub ) == "DanS"
                         Log.debug {"Found DanS"}
                         ret.dans_id = stub 
