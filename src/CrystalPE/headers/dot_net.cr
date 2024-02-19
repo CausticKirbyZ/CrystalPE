@@ -102,8 +102,8 @@ module CrystalPE
             b2 = bytes[16 + bb.version_string_length  ..  ].to_unsafe.as(DotNetlib::MetaDataHeader_2*).value
 
             # puts "version_string       : #{ b2.version_string       }"
-            puts "flags                : #{ to_c_fmnt_hex b2.flags                }"
-            puts "number_of_streams    : #{ to_c_fmnt_hex b2.number_of_streams    }"
+            Log.trace "flags                : #{ CrystalPE.to_c_fmnt_hex b2.flags                }"
+            Log.trace "number_of_streams    : #{ CrystalPE.to_c_fmnt_hex b2.number_of_streams    }"
             
             dd.flags                    = b2.flags                    
             dd.number_of_streams        = b2.number_of_streams        
