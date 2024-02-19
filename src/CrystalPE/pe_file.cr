@@ -831,14 +831,14 @@ module CrystalPE
                     Log.debug { "Parsing DotNet MetaData" }
 
                     dot_net_metadat_offset = resolve_rva_offset(@dot_net_header.not_nil!.meta_data_va)
-                    puts "DotNetMetaDataOffset: #{dot_net_metadat_offset} | #{to_c_fmnt_hex dot_net_metadat_offset}"
-                    puts "DotNetMetaDataSize:   #{@dot_net_header.not_nil!.meta_data_size} | #{to_c_fmnt_hex @dot_net_header.not_nil!.meta_data_size}"
+                    puts "DotNetMetaDataOffset: #{dot_net_metadat_offset} | #{CrystalPE.to_c_fmnt_hex dot_net_metadat_offset}"
+                    puts "DotNetMetaDataSize:   #{@dot_net_header.not_nil!.meta_data_size} | #{CrystalPE.to_c_fmnt_hex @dot_net_header.not_nil!.meta_data_size}"
 
                     @dot_net_metadata_header = DotNetMetadataHeader.from_bytes(rawfile[dot_net_metadat_offset .. dot_net_metadat_offset + @dot_net_header.not_nil!.meta_data_size ])
                     streamheader_offset = dot_net_metadat_offset + 4 + 2 + 2 + 4 + 4 + 2 + 2 + @dot_net_metadata_header.not_nil!.version_string_length
                     stream_headers = [] of DotNetStreamheader
                     c_ffset = 0 
-                    puts "stream offset: #{streamheader_offset} | #{to_c_fmnt_hex streamheader_offset}"
+                    puts "stream offset: #{streamheader_offset} | #{CrystalPE.to_c_fmnt_hex streamheader_offset}"
                     puts rawfile[ streamheader_offset .. streamheader_offset + 31 ].hexdump
 
                     @dot_net_metadata_header.not_nil!.number_of_streams.times do |t|
