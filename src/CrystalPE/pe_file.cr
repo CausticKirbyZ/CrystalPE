@@ -60,7 +60,7 @@ module CrystalPE
 
         property security           : Security? #                       = Security.new()
         property dot_net_header     : DotNetHeader? 
-        property dot_net_metadata_header     : DotNetMetadataHeader? 
+        # property dot_net_metadata_header     : DotNetMetadataHeader? 
 
         property resources          : Image_Resource_Directory? 
         # property resources  : Resources? 
