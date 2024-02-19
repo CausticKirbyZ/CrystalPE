@@ -60,6 +60,7 @@ module CrystalPE
 
         property security           : Security? #                       = Security.new()
         property dot_net_header     : DotNetHeader? 
+        property dot_net_metadata_header     : DotNetMetadataHeader? 
 
         property resources          : Image_Resource_Directory? 
         # property resources  : Resources? 
@@ -109,9 +110,9 @@ module CrystalPE
 
         # function adds a
         def parse(filename : String)
-            Log.info {"Reading File from disk..."}
+            Log.debug {"Reading File from disk..."}
             @rawfile = File.read(filename).to_slice
-            Log.info {"Done Reading File From disk."}
+            Log.debug {"Done Reading File From disk."}
             parse
         end 
 
@@ -127,14 +128,14 @@ module CrystalPE
                 # io = IO::Memory.new @rawfile 
                 # puts "dbg: rawfile[0..1]: |#{String.new(rawfile[0..1]) }|"
                 # puts "dbg: rawfile[0..1]: #{rawfile[0..1] }"
-                Log.info { "Beginning parsing" }
+                Log.debug { "Beginning parsing" }
                 if rawfile.size < 96 # smallest recorded pe file i could find online was 97 bytes...
                     raise "Parsing Error! - Size"
                 elsif String.new(rawfile[0..1]) != "MZ"
                     raise "Not a PE File.... 'MZ' != '#{String.new(rawfile[0..1])}'"
                 end 
 
-                Log.info { "PEFILE Check Complete. Now Parsing Dos Headers"}
+                Log.debug { "PEFILE Check Complete. Now Parsing Dos Headers"}
 
                 # This section parses the DOS Header into its structure. its well defined and is 64 bytes long
                 @dos_header.e_magic    = IO::ByteFormat::LittleEndian.decode( UInt16, rawfile[0..1]  )
@@ -157,7 +158,7 @@ module CrystalPE
                 @dos_header.e_res2     =  rawfile[40..59]
                 @dos_header.e_lfanew   = IO::ByteFormat::LittleEndian.decode( UInt32, rawfile[60..63]  )
 
-                Log.info { "Dos Header Parsed."}
+                Log.debug { "Dos Header Parsed."}
                 
 
 
@@ -165,14 +166,14 @@ module CrystalPE
                 # e_lfanew is the offset of the new exe header (pe header start)
                 # e_lfanew = IO::ByteFormat::LittleEndian.decode(Int32, rawfile[60..63] )
                 e_lfanew = @dos_header.e_lfanew
-                Log.debug { "e_lfanew: #{e_lfanew} | 0x#{CrystalPE.to_c_fmnt_hex e_lfanew}" }
+                Log.trace { "e_lfanew: #{e_lfanew} | 0x#{CrystalPE.to_c_fmnt_hex e_lfanew}" }
                 
                 # this is misleading and is actually the "Rich" offset but this gets updated later with the correct value. 
                 # needs to be up here to be referenced later
                 # dans_offset = ( e_lfanew - 16)
 
 
-                Log.info {"Now Parsing DOS Stub/Rich Header"}
+                Log.debug {"Now Parsing DOS Stub/Rich Header"}
                 # puts "DBG: e_lfanew : #{CrystalPE.to_c_fmnt_hex( e_lfanew) }"
                 if e_lfanew > 64 
                     # dos stubs and rich headers technically dont need to exist. so only parse them if there is an offset over 64 bytes 
@@ -234,19 +235,19 @@ module CrystalPE
                         
                     # end 
                     # puts "Has Dos Stub or Rich Header!"
-                    Log.info { "Detecting and parsing Rich Header" }
+                    Log.debug { "Detecting and parsing Rich Header" }
                     # new method of parsing 
                     if String.new(rawfile[64..( e_lfanew - 1 )]).includes? "Rich" # if it does contain "Rich"
                         # puts "Found Rich Header!"
-                        Log.info {"RichHeader Found. Now Parsing..."}
+                        Log.debug {"RichHeader Found. Now Parsing..."}
                         # provide the dos stub and set it to the 
                         @rich_header = RichHeader.from_dos_stub(rawfile[64..( e_lfanew - 1 )]) 
-                        Log.info {"Rich Info Parsed"}
+                        Log.debug {"Rich Info Parsed"}
                     end 
                 
                     # end of rich header parse 
 
-                    Log.info {"Now Parsing Dos Stub"}
+                    Log.debug {"Now Parsing Dos Stub"}
 
                     # now we can parse the dos stub here 
                     # we parse it after the rich header as we need to know the length of the rich header if there is one 
@@ -270,11 +271,11 @@ module CrystalPE
                 end 
                 # puts "DosStub: #{CrystalPE.to_c_fmnt_hex @dos_stub.bytes}"
                 # end of parsing dos stub 
-                Log.info {"Dos Stub and Rich Header Parsed"}
+                Log.debug {"Dos Stub and Rich Header Parsed"}
 
 
 
-                Log.info { "Now Parsing PE File headers" }
+                Log.debug { "Now Parsing PE File headers" }
                 # now parse the nt file headers
                 @nt_headers.signature = rawfile[e_lfanew..(e_lfanew+3)] # should be PE00
                 # @nt_headers.file_headers = NTFileHeaders.new()
@@ -294,8 +295,8 @@ module CrystalPE
                 @nt_headers.file_headers.size_of_optional_header                    = IO::ByteFormat::LittleEndian.decode( UInt16 , rawfile[(e_lfanew+20)..(e_lfanew+21)] )
                 @nt_headers.file_headers.characteristics                            = IO::ByteFormat::LittleEndian.decode( UInt16 , rawfile[(e_lfanew+22)..(e_lfanew+23)] )
 
-                Log.info { "File Headers parsed." }
-                Log.info { "Now Parsing PE Optional Headers" }
+                Log.debug { "File Headers parsed." }
+                Log.debug { "Now Parsing PE Optional Headers" }
                 fh_offset = e_lfanew+24
 
                 # now parse the optional headers 
@@ -422,9 +423,9 @@ module CrystalPE
                     end 
 
                 end 
-                Log.info {"Finished parsing NT Optional Headers"}
+                Log.debug {"Finished parsing NT Optional Headers"}
 
-                Log.info {"Now parsing Section Headers"}
+                Log.debug {"Now parsing Section Headers"}
                 sec_header_offset = dd_offset + ((16*8)) # set up offset based on position +1 of last entry inb data directory 
 
                 # now we parse the section headers
@@ -445,7 +446,7 @@ module CrystalPE
                     t.characteristics           = IO::ByteFormat::LittleEndian.decode( UInt32 , rawfile[(sec_header_offset + ((i*40) + 36))..(sec_header_offset + ((i*40) + 36 + 3))] )
                     section_table << t 
                 end
-                Log.info {"Now parsing sections themselves"}
+                Log.debug {"Now parsing sections themselves"}
 
                 
 
@@ -473,20 +474,20 @@ module CrystalPE
                     # sections[String.new(header.name.not_nil!)] = section
                     sections[ header.name ] = section 
                 end 
-                Log.info {"Sections parsed"}
+                Log.debug {"Sections parsed"}
 
-                Log.info {"Parsing overlay now.."}
+                Log.debug {"Parsing overlay now.."}
                 # now grab the overlay it is the chunk of data at the end of the binary 
                 @overlay.bytes = rawfile[endoflastsection_offset..]
                 @overlay.offset = endoflastsection_offset
-                Log.info{"DONE Parsing!"}
+                Log.debug {"DONE Parsing!"}
 
 
 
                 ########################
                 # the below blobs parse each section in the data directory 
                 ########################
-                Log.info {"Now Parsing Export Directory"}
+                Log.debug {"Now Parsing Export Directory"}
                 # puts "Parsing Export directory"
                 # Parse the Export Directory here
                 if @nt_headers.optional_headers.data_directory.export_directory.not_nil!.virtual_address.not_nil! != Bytes[0,0,0,0,0,0,0,0] # prob should have an export dir before we parse it XD 
@@ -572,7 +573,7 @@ module CrystalPE
 
 
                 end 
-                Log.info {"Finished parsing Export Directory"}
+                Log.debug {"Finished parsing Export Directory"}
                 # end of parsing export directory 
                 # puts "Done Parsing Export Dir"
 
@@ -591,7 +592,7 @@ module CrystalPE
                 # puts "IAT Offset: #{CrystalPE.to_c_fmnt_hex(iat_offset)}"
                 # image import descriptors are 20 bytes in size 
                 # we parse the iat by looping untill we find a completely null import descriptor
-                Log.info {"Now parsing Import Directory Table"}
+                Log.debug {"Now parsing Import Directory Table"}
 
                 while true 
                     # create the imported info record for the iat. we will update the names of functions later
@@ -616,7 +617,7 @@ module CrystalPE
                     # add the record to the iat array 
                     @iat << ii 
                 end 
-                Log.info {"Now parsing Import Table Functions for #{@iat.size} DLL's"}
+                Log.debug {"Now parsing Import Table Functions for #{@iat.size} DLL's"}
                 # puts "Parsing Import Functions"
                 # now load the info for the function in the iat 
                 iat.each do |ii| 
@@ -709,7 +710,7 @@ module CrystalPE
 
                     # ii.import_names << iibn 
                 end
-                Log.info {"Done parsing Import functions"}
+                Log.debug {"Done parsing Import functions"}
                 # puts "Done Parsing Import Dir"
 
                 # end of parsing Import directory 
@@ -802,8 +803,8 @@ module CrystalPE
                 # end of parsing Delayed Load Import  Directory 
 
                 # Parse the Com/.NET Directory here
-                if @nt_headers.optional_headers.data_directory.com_descriptor_directory.not_nil!.virtual_address.not_nil! != Bytes[0,0,0,0]
-                    Log.info {"Parsing Dot Net Section"}
+                if @nt_headers.optional_headers.data_directory.com_descriptor_directory.not_nil!.virtual_address.not_nil! != 0_u32
+                    Log.debug {"Parsing Dot Net Section"}
                     dot_net_offset = resolve_rva_offset(@nt_headers.optional_headers.data_directory.com_descriptor_directory.not_nil!.virtual_address.not_nil!)
 
                     @dot_net_header = DotNetHeader.new()
@@ -827,10 +828,51 @@ module CrystalPE
                     @dot_net_header.not_nil!.manage_native_header_va                = IO::ByteFormat::LittleEndian.decode(UInt32  , rawfile[dot_net_offset + 64 .. dot_net_offset + 64 + 3  ] ) 
                     @dot_net_header.not_nil!.managed_native_header_size             = IO::ByteFormat::LittleEndian.decode(UInt32  , rawfile[dot_net_offset + 68 .. dot_net_offset + 68 + 3  ] ) 
 
+                    Log.debug { "Parsing DotNet MetaData" }
+
+                    dot_net_metadat_offset = resolve_rva_offset(@dot_net_header.not_nil!.meta_data_va)
+                    puts "DotNetMetaDataOffset: #{dot_net_metadat_offset} | #{to_c_fmnt_hex dot_net_metadat_offset}"
+                    puts "DotNetMetaDataSize:   #{@dot_net_header.not_nil!.meta_data_size} | #{to_c_fmnt_hex @dot_net_header.not_nil!.meta_data_size}"
+
+                    @dot_net_metadata_header = DotNetMetadataHeader.from_bytes(rawfile[dot_net_metadat_offset .. dot_net_metadat_offset + @dot_net_header.not_nil!.meta_data_size ])
+                    streamheader_offset = dot_net_metadat_offset + 4 + 2 + 2 + 4 + 4 + 2 + 2 + @dot_net_metadata_header.not_nil!.version_string_length
+                    stream_headers = [] of DotNetStreamheader
+                    c_ffset = 0 
+                    puts "stream offset: #{streamheader_offset} | #{to_c_fmnt_hex streamheader_offset}"
+                    puts rawfile[ streamheader_offset .. streamheader_offset + 31 ].hexdump
+
+                    @dot_net_metadata_header.not_nil!.number_of_streams.times do |t|
+                        dnsth = DotNetStreamheader.new                         
+                        dnsth.offset = IO::ByteFormat::LittleEndian.decode(UInt32, rawfile[  streamheader_offset + c_ffset       .. streamheader_offset + c_ffset + 3  ]) 
+                        puts dnsth.offset 
+                        dnsth.size   = IO::ByteFormat::LittleEndian.decode(UInt32, rawfile[  streamheader_offset + c_ffset  + 4  .. streamheader_offset + c_ffset + 7  ]) 
+                        puts dnsth.size 
+
+                        # string starts at +8 and goes to null terminate but needs to be alighed to the 4 byte boundry thus the % 
+                        name_bytes   = rawfile.to_unsafe +  streamheader_offset + c_ffset + 8
+                        dnsth.name   = String.new(   rawfile.to_unsafe +  streamheader_offset + c_ffset  + 8   )
+
+                        dnsth.name   = dnsth.name + "\0" * ( 4 - ( dnsth.name.size % 4)   )
+
+                        # pp dnsth.name
+
+                        stream_headers << dnsth
+                        c_ffset += 8 + dnsth.name.size 
+                    end 
+
+                    # pp stream_headers
 
 
 
-                    Log.info {"Done Parsing Dot Net Section"}
+                    # https://www.ntcore.com/files/dotnetformat.htm
+                    # we need to continue to parse the metadata tables here 
+
+
+                    Log.debug { "Done Parsing DotNet MetaData" }
+
+
+
+                    Log.debug {"Done Parsing Dot Net Section"}
                 end 
                 # end of parsing .NET Directory 
 
@@ -1272,7 +1314,8 @@ module CrystalPE
         # this is not 100% perfect but is a good indication. 
         # for additional info on if its dotnet or other managed code is to look at the import tables. if it imports "mscoree.dll" it is also likely managed code
         def dot_net?  : Bool 
-            return @nt_headers.optional_headers.data_directory.com_descriptor_directory.not_nil!.virtual_address.not_nil! != Bytes[0,0,0,0]
+            return @nt_headers.optional_headers.data_directory.com_descriptor_directory.not_nil!.virtual_address.not_nil! != 0_u32
+            # @nt_headers.optional_headers.data_directory.com_descriptor_directory
         end 
 
         # returns an array of strings that are human printable(ascii table portions) that are more than 4 characters by default
