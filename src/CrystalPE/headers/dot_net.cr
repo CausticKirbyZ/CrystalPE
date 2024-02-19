@@ -4,6 +4,13 @@
 # this class needs to be updated with more acurate information based on the above docs. the current format "works" but is not 100% acurate
 
 module CrystalPE 
+
+
+    # class DotNet 
+    #     header   : DotNetHeader         = DotNetHeader.new
+    #     metadata : DotNetMetadataHeader = DotNetMetadataHeader.new
+    # end 
+
     class DotNetHeader
         property cb                                     : UInt32 = 0 
         property major_runtime_version                  : UInt16 = 0 
@@ -54,4 +61,96 @@ module CrystalPE
             return io.to_slice 
         end 
     end 
+
+
+
+
+
+
+
+    class DotNetMetadataHeader
+        property signature                : UInt32  = 0 
+        property major_version            : UInt16  = 0 
+        property minor_version            : UInt16  = 0 
+        property reserved1                : UInt32  = 0 
+        property version_string_length    : UInt32  = 0 
+        property version_string           : String  = ""  # its a string of size version_string_length rounded up to 4 
+        property flags                    : UInt16  = 0 # should always be 0x00 0x00 
+        property number_of_streams        : UInt16  = 0 
+
+
+        def self.from_bytes(bytes : Bytes ) : DotNetMetadataHeader
+            bb = bytes.to_unsafe.as(DotNetlib::MetaDataHeader_1*).value
+            # puts "signature            : #{ to_c_fmnt_hex bb.signature            } | #{ to_c_fmnt_hex bytes[0..4]}"
+            # puts "major_version        : #{ to_c_fmnt_hex bb.major_version        }"
+            # puts "minor_version        : #{ to_c_fmnt_hex bb.minor_version        }"
+            # puts "reserved1            : #{ to_c_fmnt_hex bb.reserved1            }"
+            # puts "version_string_length: #{ to_c_fmnt_hex bb.version_string_length}"
+
+
+
+            dd = DotNetMetadataHeader.new() 
+            
+            dd.signature                = bb.signature                
+            dd.major_version            = bb.major_version            
+            dd.minor_version            = bb.minor_version            
+            dd.reserved1                = bb.reserved1                
+            dd.version_string_length    = bb.version_string_length    
+
+            dd.version_string           = String.new( bytes[ 16 .. 16 + bb.version_string_length ]   ) 
+
+            b2 = bytes[16 + bb.version_string_length  ..  ].to_unsafe.as(DotNetlib::MetaDataHeader_2*).value
+
+            # puts "version_string       : #{ b2.version_string       }"
+            puts "flags                : #{ to_c_fmnt_hex b2.flags                }"
+            puts "number_of_streams    : #{ to_c_fmnt_hex b2.number_of_streams    }"
+            
+            dd.flags                    = b2.flags                    
+            dd.number_of_streams        = b2.number_of_streams        
+
+
+
+            return dd 
+        end 
+    end 
+
+    class DotNetStreamheader 
+        property offset : UInt32  = 0
+        property size   : UInt32  = 0
+        property name   : String = "" 
+
+        def self.from_bytes (bytes : Bytes ) : DotNetStreamheader
+            ret = DotNetStreamheader.new
+            ret.offset = IO::ByteFormat::LittleEndian.decode(UInt32, bytes[0..3]) 
+            ret.size   = IO::ByteFormat::LittleEndian.decode(UInt32, bytes[4..7]) 
+            ret.name = String.new(bytes[8.. 8 + ret.size])
+            return ret 
+        end 
+
+    end 
+
+
+
+
+
+
+    lib DotNetlib
+        struct MetaDataHeader_1
+            signature                : UInt32
+            major_version            : UInt16
+            minor_version            : UInt16
+            reserved1                : UInt32
+            version_string_length    : UInt32
+            # version_string           : UInt8 *  # its a string of size version_string_length rounded up to 4 
+            # flags                    : UInt16
+            # number_of_streams        : UInt32
+        end 
+        struct MetaDataHeader_2
+            flags                    : UInt16
+            number_of_streams        : UInt16
+        end 
+    end 
+
+
+
 end 
